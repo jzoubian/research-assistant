@@ -100,4 +100,4 @@ The workflow philosophy, module structure, and multi-agent patterns are adapted 
 
 ## License
 
-MIT License
+GPL-3.0 License. See [LICENSE](./LICENSE) for details.
