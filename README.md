@@ -19,6 +19,7 @@ This project reimagines the [Denario scientific discovery pipeline](https://gith
 - **State Persistence**: Automatic save/resume of research progress
 - **Iteration History**: Track all iterations with timestamps, inputs, outputs, and notes
 - **Resource Management**: Specify and respect computational constraints (GPU, cluster, memory limits)
+- **Configuration Management**: TOML-based configuration for reproducible project setup
 
 ## Installation
 
@@ -52,6 +53,35 @@ finally:
     assistant.cleanup()  # Automatically saves state
 ```
 
+## Configuration File
+
+All project parameters can be stored in `research_config.toml`:
+
+```toml
+project_name = "my_research"
+env_manager = "pixi"
+python_version = "3.10"
+
+[execution]
+mode = "interactive"
+require_code_approval = true
+max_iterations = 3
+
+[agents.idea_maker]
+model = "gpt-4"
+temperature = 0.9
+
+[modules.paper]
+enabled = true
+journal_format = "nature"
+```
+
+To run a project from configuration:
+```bash
+# All settings loaded from research_config.toml
+research-assistant run my_research
+```
+
 ## CLI Usage
 
 ```bash
@@ -82,6 +112,101 @@ research-assistant iterations my_research --module analysis
 # Configure computational resources
 research-assistant resources my_research --configure
 research-assistant resources my_research --show
+
+# View/edit configuration
+research-assistant config my_research --show
+research-assistant config my_research --edit
+research-assistant config my_research --validate
+
+# Export configuration template
+research-assistant config my_research --export-template --output my_template.toml
+```
+
+## Configuration Management
+
+The assistant uses a TOML-based configuration system for complete project reproducibility.
+
+### Configuration File Structure
+
+**research_config.toml:**
+```toml
+# Project metadata
+project_name = "cosmology_analysis"
+description = "CMB power spectrum analysis"
+version = "1.0.0"
+
+# Environment
+env_manager = "pixi"  # pixi, apptainer, nix, guix
+python_version = "3.10"
+
+# Execution settings
+[execution]
+mode = "interactive"  # interactive or autonomous
+require_code_approval = true
+max_iterations = 3
+timeout_seconds = 300
+
+# Agent configurations
+[agents.idea_maker]
+name = "idea_maker"
+model = "gpt-4"
+temperature = 0.9
+
+[agents.analyst]
+name = "analyst"
+model = "o3-mini"
+temperature = 0.5
+reasoning_effort = "high"
+
+# Module settings
+[modules.paper]
+enabled = true
+journal_format = "nature"
+
+[modules.literature]
+enabled = true
+max_papers = 20
+
+# Custom parameters
+[custom]
+domain = "cosmology"
+```
+
+### Configuration Commands
+
+```bash
+# View current configuration
+research-assistant config my_research --show
+
+# Edit configuration (opens in $EDITOR)
+research-assistant config my_research --edit
+
+# Validate configuration
+research-assistant config my_research --validate
+
+# Export template for new projects
+research-assistant config . --export-template --output template.toml
+```
+
+### Benefits
+
+1. **Reproducibility**: Share config file to reproduce exact research setup
+2. **Version Control**: Track configuration changes in git
+3. **Consistency**: Ensure same parameters across runs
+4. **Documentation**: Self-documenting project parameters
+5. **Portability**: Move projects between systems easily
+
+### Running from Configuration
+
+With a complete configuration file, you can run projects with minimal CLI arguments:
+
+```bash
+# Everything configured in research_config.toml
+research-assistant run my_research
+
+# Override specific settings
+research-assistant run my_research --env-manager apptainer
+research-assistant run my_research --start-from analysis
 ```
 
 ## Resource Management

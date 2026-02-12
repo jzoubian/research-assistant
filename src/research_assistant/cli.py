@@ -56,6 +56,8 @@ Describe the scientific domain, key questions of interest, and any constraints.
     
     # Create initial state file with env manager preference
     from research_assistant.state import ResearchState
+    from research_assistant.config_manager import ConfigManager
+    
     state = ResearchState(project_dir=project_dir, env_manager=env_manager)
     
     # Initialize default resources
@@ -63,15 +65,23 @@ Describe the scientific domain, key questions of interest, and any constraints.
         state.resource_manager.create_default_resources()
         state.resource_manager.save_resources()
     
+    # Create default configuration
+    config_mgr = ConfigManager(project_dir)
+    config_mgr.create_default_config(project_name)
+    config_mgr.config.env_manager = env_manager
+    config_mgr.save_config()
+    
     state.save_state()
 
     console.print(f"[green]✓ Initialized research project at {project_dir}[/green]")
     console.print(f"[green]✓ Environment manager: {env_manager}[/green]")
     console.print(f"[green]✓ Default resources configured[/green]")
+    console.print(f"[green]✓ Configuration file created: research_config.toml[/green]")
     console.print(f"\n[yellow]Next steps:[/yellow]")
-    console.print(f"1. Configure resources: research-assistant resources {project_name} --configure")
-    console.print(f"2. Edit {project_dir}/input/data_description.md")
-    console.print(f"3. Run: research-assistant idea --project {project_dir}")
+    console.print(f"1. Review/edit config: {project_dir}/research_config.toml")
+    console.print(f"2. Configure resources: research-assistant resources {project_name} --configure")
+    console.print(f"3. Edit {project_dir}/input/data_description.md")
+    console.print(f"4. Run: research-assistant run {project_dir}")
 
 
 @app.command()
@@ -184,14 +194,32 @@ def run(
 ):
     """Run complete research workflow."""
     from research_assistant.state import ResearchState
+    from research_assistant.config_manager import ConfigManager
     
     project_dir = Path(project).resolve()
+    
+    # Load configuration
+    config_mgr = ConfigManager(project_dir)
+    if config_mgr.load_config():
+        console.print(f"[green]Loaded configuration from research_config.toml[/green]")
+        console.print(config_mgr.get_summary())
+        
+        # Override with CLI args if provided
+        config_mgr.update_from_cli_args(
+            mode="interactive" if interactive else "autonomous",
+            require_code_approval=approve_code,
+            env_manager=env_manager,
+        )
+    else:
+        console.print(f"[yellow]No config file found, using defaults[/yellow]")
     
     # Load existing state or create new one
     try:
         state = ResearchState.load_state(project_dir)
         if env_manager:
             state.env_manager = env_manager  # Override if specified
+        elif config_mgr.config:
+            state.env_manager = config_mgr.config.env_manager
         console.print(f"[green]Loaded existing project state[/green]")
     except FileNotFoundError:
         state = ResearchState(project_dir=project_dir, env_manager=env_manager or "pixi")
@@ -298,6 +326,72 @@ def iterations(
         
         console.print(table)
         console.print(f"\n[dim]Use --module to see detailed iteration history for a specific module[/dim]")
+
+
+@app.command()
+def config(
+    project: str = typer.Argument(..., help="Path to research project"),
+    show: bool = typer.Option(False, "--show", help="Show current configuration"),
+    edit: bool = typer.Option(False, "--edit", help="Open config file in editor"),
+    validate: bool = typer.Option(False, "--validate", help="Validate configuration"),
+    export_template: bool = typer.Option(False, "--export-template", help="Export configuration template"),
+    output: Optional[str] = typer.Option(None, "--output", help="Output path for template export"),
+):
+    """Manage project configuration."""
+    from research_assistant.config_manager import ConfigManager
+    import subprocess
+    import os
+    
+    project_dir = Path(project).resolve()
+    config_mgr = ConfigManager(project_dir)
+    
+    if export_template:
+        output_path = Path(output) if output else Path("research_config_template.toml")
+        if config_mgr.export_template(output_path):
+            console.print(f"[green]✓ Template exported to {output_path}[/green]")
+        else:
+            console.print(f"[red]Failed to export template[/red]")
+        return
+    
+    if not config_mgr.load_config():
+        console.print(f"[red]No configuration file found at {config_mgr.config_file}[/red]")
+        console.print(f"[yellow]Run 'research-assistant init' to create a project[/yellow]")
+        raise typer.Exit(1)
+    
+    if validate:
+        is_valid, errors = config_mgr.validate_config()
+        if is_valid:
+            console.print("[green]✓ Configuration is valid[/green]")
+        else:
+            console.print("[red]✗ Configuration has errors:[/red]")
+            for error in errors:
+                console.print(f"  - {error}")
+        return
+    
+    if edit:
+        editor = os.environ.get('EDITOR', 'nano')
+        try:
+            subprocess.run([editor, str(config_mgr.config_file)])
+            console.print("[green]✓ Configuration file closed[/green]")
+            
+            # Validate after editing
+            if config_mgr.load_config():
+                is_valid, errors = config_mgr.validate_config()
+                if is_valid:
+                    console.print("[green]✓ Configuration is valid[/green]")
+                else:
+                    console.print("[yellow]⚠ Configuration has warnings:[/yellow]")
+                    for error in errors:
+                        console.print(f"  - {error}")
+        except Exception as e:
+            console.print(f"[red]Failed to open editor: {e}[/red]")
+        return
+    
+    if show or True:  # Default action
+        console.print("\n[bold cyan]Project Configuration[/bold cyan]\n")
+        console.print(config_mgr.get_summary())
+        console.print(f"\n[dim]Config file: {config_mgr.config_file}[/dim]")
+        console.print(f"[dim]Use --edit to modify configuration[/dim]")
 
 
 @app.command()
