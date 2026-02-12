@@ -17,6 +17,7 @@ console = Console()
 def init(
     project_name: str = typer.Argument(..., help="Name of the research project"),
     path: Optional[str] = typer.Option(None, help="Path where project should be created"),
+    env_manager: str = typer.Option("pixi", help="Environment manager (pixi, apptainer, nix, guix)"),
 ):
     """Initialize a new research project."""
     if path:
@@ -52,8 +53,14 @@ Describe the scientific domain, key questions of interest, and any constraints.
 """
 
     (project_dir / "input" / "data_description.md").write_text(data_desc_template)
+    
+    # Create initial state file with env manager preference
+    from research_assistant.state import ResearchState
+    state = ResearchState(project_dir=project_dir, env_manager=env_manager)
+    state.save_state()
 
     console.print(f"[green]✓ Initialized research project at {project_dir}[/green]")
+    console.print(f"[green]✓ Environment manager: {env_manager}[/green]")
     console.print(f"\n[yellow]Next steps:[/yellow]")
     console.print(f"1. Edit {project_dir}/input/data_description.md")
     console.print(f"2. Run: research-assistant idea --project {project_dir}")
@@ -165,58 +172,47 @@ def run(
     start_from: Optional[str] = typer.Option(None, help="Start from specific module (idea, literature, methodology, analysis, paper, review)"),
     approve_code: bool = typer.Option(True, help="Require approval before code execution"),
     journal_format: str = typer.Option("nature", help="Journal format for paper"),
+    env_manager: Optional[str] = typer.Option(None, help="Environment manager override (pixi, apptainer, nix, guix)"),
 ):
     """Run complete research workflow."""
-    async def run_workflow():
-        assistant = ResearchAssistant(project_dir=project)
-        await assistant.initialize()
+    from research_assistant.state import ResearchState
+    
+    project_dir = Path(project).resolve()
+    
+    # Load existing state or create new one
+    try:
+        state = ResearchState.load_state(project_dir)
+        if env_manager:
+            state.env_manager = env_manager  # Override if specified
+        console.print(f"[green]Loaded existing project state[/green]")
+    except FileNotFoundError:
+        state = ResearchState(project_dir=project_dir, env_manager=env_manager or "pixi")
+        console.print(f"[yellow]No existing state found, creating new project[/yellow]")
+    
+    assistant = ResearchAssistant(state, env_manager=state.env_manager)
 
-        mode = "interactive" if interactive else "automatic"
-        modules = ["idea", "literature", "methodology", "analysis", "paper", "review"]
+    try:
+        assistant.initialize()
 
-        # Determine starting point
-        start_index = 0
+        mode = "interactive" if interactive else "autonomous"
+        
+        # Use run_from_module if start_from is specified
         if start_from:
-            if start_from in modules:
-                start_index = modules.index(start_from)
-            else:
-                console.print(f"[red]Invalid module: {start_from}[/red]")
-                return
-
-        # Load data description if starting from beginning
-        if start_index == 0:
-            assistant.load_data_description("input/data_description.md")
-
-        # Execute modules
-        if start_index <= 0:
-            console.print("\n[bold cyan]Starting Module 1: Idea Generation[/bold cyan]")
-            await assistant.generate_idea(mode=mode)
-
-        if start_index <= 1:
-            console.print("\n[bold cyan]Starting Module 2: Literature Review[/bold cyan]")
-            await assistant.review_literature(mode=mode)
-
-        if start_index <= 2:
-            console.print("\n[bold cyan]Starting Module 3: Methodology Development[/bold cyan]")
-            await assistant.develop_methodology(mode=mode)
-
-        if start_index <= 3:
-            console.print("\n[bold cyan]Starting Module 4: Analysis Execution[/bold cyan]")
-            await assistant.execute_analysis(mode=mode, require_approval=approve_code)
-
-        if start_index <= 4:
-            console.print("\n[bold cyan]Starting Module 5: Paper Writing[/bold cyan]")
-            await assistant.write_paper(mode=mode, journal_format=journal_format)
-
-        if start_index <= 5:
-            console.print("\n[bold cyan]Starting Module 6: Review & Refinement[/bold cyan]")
-            await assistant.review_paper(mode=mode)
-
-        await assistant.cleanup()
+            console.print(f"\n[bold]Starting workflow from module: {start_from}[/bold]\n")
+            assistant.run_from_module(start_from, mode, require_approval=approve_code, journal_format=journal_format)
+        else:
+            console.print(f"\n[bold]Starting complete research workflow in {mode} mode[/bold]\n")
+            assistant.run_idea_generation(mode)
+            assistant.run_literature_review(mode)
+            assistant.run_methodology_design(mode)
+            assistant.run_analysis_execution(mode, require_approval=approve_code)
+            assistant.run_paper_writing(mode, journal_format=journal_format)
+            assistant.run_review_synthesis(mode)
 
         console.print("\n[bold green]✓ Complete research workflow finished![/bold green]")
 
-    asyncio.run(run_workflow())
+    finally:
+        assistant.cleanup()
 
 
 @app.command()
@@ -224,9 +220,76 @@ def resume(
     project: str = typer.Argument(..., help="Path to research project"),
     from_module: str = typer.Option(..., "--from", help="Module to resume from"),
     interactive: bool = typer.Option(True, help="Interactive mode with user reviews"),
+    env_manager: Optional[str] = typer.Option(None, help="Environment manager override"),
 ):
     """Resume research workflow from a specific module."""
-    run(project=project, interactive=interactive, start_from=from_module)
+    run(project=project, interactive=interactive, start_from=from_module, env_manager=env_manager)
+
+
+@app.command()
+def iterations(
+    project: str = typer.Argument(..., help="Path to research project"),
+    module: Optional[str] = typer.Option(None, help="Show iterations for specific module"),
+):
+    """Display iteration history for the project."""
+    from research_assistant.state import ResearchState
+    from rich.table import Table
+    
+    project_dir = Path(project).resolve()
+    
+    try:
+        state = ResearchState.load_state(project_dir)
+    except FileNotFoundError:
+        console.print(f"[red]No project state found at {project_dir}[/red]")
+        raise typer.Exit(1)
+    
+    if module:
+        # Show iterations for specific module
+        iterations = state.module_iterations.get(module, [])
+        if not iterations:
+            console.print(f"[yellow]No iterations found for module: {module}[/yellow]")
+            return
+        
+        console.print(f"\n[bold cyan]Iteration History for {module.upper()}[/bold cyan]\n")
+        
+        for iter_data in iterations:
+            table = Table(title=f"Iteration {iter_data.iteration}")
+            table.add_column("Property", style="cyan")
+            table.add_column("Value", style="white")
+            
+            table.add_row("Timestamp", str(iter_data.timestamp))
+            table.add_row("Status", iter_data.status)
+            table.add_row("Input Files", ", ".join(str(f) for f in iter_data.input_files))
+            table.add_row("Output Files", ", ".join(str(f) for f in iter_data.output_files))
+            table.add_row("Notes", iter_data.notes)
+            
+            console.print(table)
+            console.print()
+    else:
+        # Show summary for all modules
+        console.print("\n[bold cyan]Iteration Summary for All Modules[/bold cyan]\n")
+        
+        table = Table()
+        table.add_column("Module", style="cyan")
+        table.add_column("Iterations", justify="right", style="green")
+        table.add_column("Last Run", style="yellow")
+        table.add_column("Status", style="white")
+        
+        for module_name in ["idea", "literature", "methodology", "analysis", "paper", "review"]:
+            count = state.get_module_iteration_count(module_name)
+            if count > 0:
+                latest = state.get_latest_iteration(module_name)
+                table.add_row(
+                    module_name.upper(),
+                    str(count),
+                    str(latest.timestamp) if latest else "-",
+                    latest.status if latest else "-"
+                )
+            else:
+                table.add_row(module_name.upper(), "0", "-", "-")
+        
+        console.print(table)
+        console.print(f"\n[dim]Use --module to see detailed iteration history for a specific module[/dim]")
 
 
 if __name__ == "__main__":

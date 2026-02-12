@@ -11,10 +11,13 @@ This project reimagines the [Denario scientific discovery pipeline](https://gith
 ## Features
 
 - **Multi-Agent Architecture**: 9 specialized agents with configurable models and parameters
-- **Human-in-the-Loop**: Review and edit outputs at each stage
+- **Human-in-the-Loop**: Review and edit outputs at each stage with full iteration tracking
 - **Markdown-Based Workflow**: All research artifacts are human-readable markdown files
 - **Flexible Configuration**: Customize agents, models, and workflows
 - **Iterative Refinement**: Support for nested iteration loops in analysis
+- **Reproducible Execution**: Isolated environments (pixi, apptainer, nix, guix) for code execution
+- **State Persistence**: Automatic save/resume of research progress
+- **Iteration History**: Track all iterations with timestamps, inputs, outputs, and notes
 
 ## Installation
 
@@ -26,36 +29,35 @@ pip install -e .
 ## Quick Start
 
 ```python
-import asyncio
 from research_assistant import ResearchAssistant
+from research_assistant.state import ResearchState
 
-async def main():
-    assistant = ResearchAssistant(project_dir="./my_research")
-    await assistant.initialize()
-    
-    # Load data description
-    assistant.load_data_description("input/data_description.md")
+# Create or load project state
+state = ResearchState(project_dir="./my_research", env_manager="pixi")
+assistant = ResearchAssistant(state, env_manager="pixi")
+
+try:
+    assistant.initialize()
     
     # Run workflow with manual review at each step
-    await assistant.generate_idea(mode="interactive")
-    await assistant.review_literature()
-    await assistant.develop_methodology()
-    await assistant.execute_analysis(require_approval=True)
-    await assistant.write_paper(journal_format="nature")
-    await assistant.review_paper()
+    assistant.run_idea_generation(mode="interactive")
+    assistant.run_literature_review(mode="interactive")
+    assistant.run_methodology_design(mode="interactive")
+    assistant.run_analysis_execution(mode="interactive", require_approval=True)
+    assistant.run_paper_writing(mode="interactive", journal_format="nature")
+    assistant.run_review_synthesis(mode="interactive")
     
-    await assistant.cleanup()
-
-asyncio.run(main())
+finally:
+    assistant.cleanup()  # Automatically saves state
 ```
 
 ## CLI Usage
 
 ```bash
 # Initialize new research project
-research-assistant init my_research
+research-assistant init my_research --env-manager pixi
 
-# Run individual steps
+# Run individual steps (state is automatically saved/loaded)
 research-assistant idea --project my_research --interactive
 research-assistant literature --project my_research
 research-assistant methodology --project my_research
@@ -65,6 +67,59 @@ research-assistant review --project my_research
 
 # Run full pipeline
 research-assistant run --project my_research --interactive
+
+# Resume from specific module
+research-assistant resume my_research --from methodology
+
+# Run from specific module onwards (all remaining modules)
+research-assistant run --project my_research --start-from analysis
+
+# View iteration history
+research-assistant iterations my_research
+research-assistant iterations my_research --module analysis
+```
+
+## Environment Management
+
+The assistant supports multiple environment managers optimized for reproducible scientific computation:
+
+- **pixi** (default): Modern conda alternative with fast dependency resolution and `pixi.toml`. Best for rapid development with scientific Python packages.
+- **apptainer** (formerly Singularity): HPC-focused containers with `apptainer.def`. Designed for shared computing clusters, no root required, native MPI support.
+- **nix**: Declarative reproducible builds with `default.nix`. Bit-for-bit reproducibility with precise versioning.
+- **guix**: Functional package manager with `guix.scm`. Transactional operations, complete auditability, freedom-respecting software.
+
+```bash
+# Specify environment manager during initialization
+research-assistant init my_research --env-manager apptainer
+
+# Override environment manager for a run
+research-assistant run --project my_research --env-manager nix
+```
+
+**Why these tools for scientific computing?**
+- **Reproducibility**: All support precise dependency specification and version locking
+- **HPC Compatibility**: Apptainer/Singularity is the standard for shared supercomputers
+- **No root required**: All can run without administrator privileges
+- **Scientific libraries**: Excellent support for NumPy, SciPy, CUDA, MPI, etc.
+- **Long-term stability**: Package manifests ensure results stay reproducible for years
+
+## Iteration Tracking
+
+Every module run is tracked as an iteration with:
+- **Iteration number**: Sequential count for each module
+- **Timestamp**: When the iteration was performed
+- **Input files**: Files used as input
+- **Output files**: Files generated
+- **Notes**: Description of what was done
+- **Status**: Success, failed, or in-progress
+
+View iteration history:
+```bash
+# Summary for all modules
+research-assistant iterations my_research
+
+# Detailed history for specific module
+research-assistant iterations my_research --module analysis
 ```
 
 ## Architecture

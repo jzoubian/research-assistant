@@ -8,6 +8,7 @@ from rich.prompt import Confirm
 from research_assistant.config import AgentConfig, DEFAULT_AGENTS
 from research_assistant.state import ResearchState
 from research_assistant.orchestrator import AgentOrchestrator
+from research_assistant.environment import EnvironmentManager
 
 
 console = Console()
@@ -20,17 +21,29 @@ class ResearchAssistant:
         self,
         project_dir: str,
         agent_configs: Optional[dict[str, AgentConfig]] = None,
+        env_manager: str = "pixi",
     ):
         """Initialize research assistant.
 
         Args:
             project_dir: Path to research project directory
             agent_configs: Custom agent configurations (defaults to DEFAULT_AGENTS)
+            env_manager: Environment manager type (pixi, conda, venv, docker)
         """
         self.project_dir = Path(project_dir)
         self.agent_configs = agent_configs or DEFAULT_AGENTS
         self.orchestrator = AgentOrchestrator(str(self.project_dir))
-        self.state = ResearchState(project_dir=self.project_dir)
+        
+        # Try to load existing state, otherwise create new
+        loaded_state = ResearchState.load_state(self.project_dir)
+        if loaded_state:
+            self.state = loaded_state
+            console.print("[yellow]Loaded existing research state[/yellow]")
+        else:
+            self.state = ResearchState(project_dir=self.project_dir, env_manager=env_manager)
+        
+        # Initialize environment manager
+        self.env_manager = EnvironmentManager(self.project_dir, env_manager)
 
         # Ensure project structure exists
         self._setup_project_structure()
@@ -57,6 +70,14 @@ class ResearchAssistant:
 
         # Load existing state from files
         self.state.load_from_files()
+        
+        # Initialize environment for code execution
+        console.print(f"[cyan]Initializing {self.state.env_manager} environment...[/cyan]")
+        env_success = self.env_manager.initialize_environment()
+        if env_success:
+            console.print(f"[green]✓ {self.state.env_manager} environment ready[/green]")
+        else:
+            console.print(f"[yellow]⚠ {self.state.env_manager} initialization failed, code execution may not work[/yellow]")
 
         console.print("[bold green]✓ Research Assistant initialized[/bold green]\n")
 
@@ -147,7 +168,7 @@ class ResearchAssistant:
         from research_assistant.modules.analysis import run_analysis_execution
 
         await run_analysis_execution(
-            self.orchestrator, self.state, mode, self.project_dir, require_approval
+            self.orchestrator, self.state, mode, self.project_dir, require_approval, self.env_manager
         )
 
         self.state.mark_module_complete("analysis")
@@ -193,8 +214,51 @@ class ResearchAssistant:
     async def cleanup(self) -> None:
         """Cleanup resources and close all sessions."""
         console.print("\n[bold]Cleaning up...[/bold]")
+        
+        # Save state before cleanup
+        self.state.save_state()
+        console.print("[green]✓ State saved[/green]")
+        
         await self.orchestrator.cleanup()
         console.print("[bold green]✓ Cleanup complete[/bold green]")
+    
+    async def run_from_module(self, start_module: str, mode: str = "interactive", **kwargs) -> None:
+        """Run all modules starting from a specific module.
+        
+        Args:
+            start_module: Module to start from (idea, literature, methodology, analysis, paper, review)
+            mode: "interactive" or "automatic"
+            **kwargs: Additional arguments for specific modules
+        """
+        modules = ["idea", "literature", "methodology", "analysis", "paper", "review"]
+        
+        if start_module not in modules:
+            console.print(f"[red]Error: Unknown module '{start_module}'[/red]")
+            return
+        
+        start_index = modules.index(start_module)
+        
+        console.print(f"\n[bold cyan]Running modules from '{start_module}' onwards...[/bold cyan]\n")
+        
+        for i in range(start_index, len(modules)):
+            module = modules[i]
+            
+            if module == "idea":
+                await self.generate_idea(mode=mode)
+            elif module == "literature":
+                await self.review_literature(mode=mode)
+            elif module == "methodology":
+                await self.develop_methodology(mode=mode)
+            elif module == "analysis":
+                require_approval = kwargs.get("require_approval", True)
+                await self.execute_analysis(mode=mode, require_approval=require_approval)
+            elif module == "paper":
+                journal_format = kwargs.get("journal_format", "nature")
+                await self.write_paper(mode=mode, journal_format=journal_format)
+            elif module == "review":
+                await self.review_paper(mode=mode)
+        
+        console.print("\n[bold green]✓ All modules from '{start_module}' completed![/bold green]")
 
 
 def prompt_user_review(file_path: Path, mode: str = "interactive") -> bool:

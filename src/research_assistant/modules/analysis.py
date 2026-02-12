@@ -17,6 +17,7 @@ async def run_analysis_execution(
     mode: str,
     project_dir: Path,
     require_approval: bool = True,
+    env_manager = None,
 ) -> None:
     """Run analysis execution with nested iteration loops.
 
@@ -30,6 +31,7 @@ async def run_analysis_execution(
         mode: "interactive" or "automatic"
         project_dir: Project directory path
         require_approval: Whether to require user approval before code execution
+        env_manager: Environment manager for isolated code execution
     """
     output_dir = project_dir / "output"
     code_dir = output_dir / "code"
@@ -138,7 +140,17 @@ Provide complete, executable Python code.
 
             # Step 3: Executor runs code
             console.print("[cyan]Executor running code...[/cyan]")
-            exec_prompt = f"""Execute this Python code and report results:
+            
+            # Use environment manager if available
+            if env_manager:
+                success, stdout, stderr = env_manager.execute_code(code, timeout=300)
+                if success:
+                    exec_response = f"Execution successful:\n\nSTDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
+                else:
+                    exec_response = f"Execution failed:\n\nSTDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
+            else:
+                # Fallback to direct execution
+                exec_prompt = f"""Execute this Python code and report results:
 
 ```python
 {code}
@@ -150,8 +162,9 @@ Run the code using the execute_code tool and report:
 - Whether execution was successful
 """
 
-            exec_response = await orchestrator.send_to_agent("executor", exec_prompt, context)
-            state.add_agent_interaction("executor", exec_prompt, exec_response)
+                exec_response = await orchestrator.send_to_agent("executor", exec_prompt, context)
+            
+            state.add_agent_interaction("executor", "Code execution", exec_response)
 
             # Check if execution was successful
             if "Execution successful" in exec_response or "successful" in exec_response.lower():
@@ -243,8 +256,22 @@ Analyze the error and provide corrected code that fixes the issue.
     # Save final analysis
     final_analysis_file = output_dir / "analysis.md"
     state.save_to_file(final_analysis_file, state.analysis)
+    
+    # Collect all output files
+    output_files = ["output/analysis.md"]
+    output_files.extend([str(p.relative_to(project_dir)) for p in state.code_files])
+    output_files.extend([str(p.relative_to(project_dir)) for p in state.plot_paths])
+    output_files.extend([str(p.relative_to(project_dir)) for p in state.intermediate_analyses])
+    
+    # Track this iteration
+    iteration_num = state.add_module_iteration(
+        module="analysis",
+        input_files=["output/methodology.md", "output/idea.md", "output/literature.md", "input/data_description.md"],
+        output_files=output_files,
+        notes=f"Analysis execution with {analysis_iteration} iteration(s), nested debugging loops"
+    )
 
-    console.print(f"\n[green]✓ Final analysis saved to {final_analysis_file}[/green]")
+    console.print(f"\n[green]✓ Final analysis saved to {final_analysis_file} (iteration {iteration_num})[/green]")
     console.print(f"[green]✓ Code files saved to {code_dir}[/green]")
     console.print(f"[green]✓ Total analysis iterations: {analysis_iteration}[/green]")
 

@@ -114,8 +114,16 @@ Provide feedback on what should be improved or added.
 
     state.save_to_file(lit_file, final_literature)
     state.literature = literature
+    
+    # Track this iteration
+    iteration_num = state.add_module_iteration(
+        module="literature",
+        input_files=["output/idea.md", "input/data_description.md"],
+        output_files=["output/literature.md"],
+        notes="Literature search and synthesis with analyst review"
+    )
 
-    console.print(f"[green]✓ Literature review saved to {lit_file}[/green]")
+    console.print(f"[green]✓ Literature review saved to {lit_file} (iteration {iteration_num})[/green]")
 
     if not prompt_user_review(lit_file, mode):
         return

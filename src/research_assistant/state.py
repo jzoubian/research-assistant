@@ -5,12 +5,23 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 
+class ModuleIteration(BaseModel):
+    """Track a single iteration of a module."""
+    iteration: int
+    timestamp: str
+    input_files: list[str] = Field(default_factory=list)
+    output_files: list[str] = Field(default_factory=list)
+    notes: str = ""
+    status: str = "completed"  # completed, failed, in_progress
+
+
 class ResearchState(BaseModel):
     """State management for research workflow."""
 
     # Project metadata
     project_dir: Path
     data_description: str = ""
+    env_manager: str = "pixi"  # pixi, conda, venv, docker
 
     # Research artifacts
     idea: str = ""
@@ -29,6 +40,9 @@ class ResearchState(BaseModel):
 
     # Module completion tracking
     completed_modules: set[str] = Field(default_factory=set)
+    
+    # Iteration tracking per module
+    module_iterations: dict[str, list[ModuleIteration]] = Field(default_factory=dict)
 
     class Config:
         arbitrary_types_allowed = True
@@ -40,6 +54,75 @@ class ResearchState(BaseModel):
     def is_module_complete(self, module: str) -> bool:
         """Check if a module is completed."""
         return module in self.completed_modules
+    
+    def add_module_iteration(
+        self, module: str, input_files: list[str], output_files: list[str], notes: str = ""
+    ) -> int:
+        """Add a new iteration for a module.
+        
+        Returns:
+            Iteration number
+        """
+        from datetime import datetime
+        
+        if module not in self.module_iterations:
+            self.module_iterations[module] = []
+        
+        iteration_num = len(self.module_iterations[module]) + 1
+        
+        iteration = ModuleIteration(
+            iteration=iteration_num,
+            timestamp=datetime.now().isoformat(),
+            input_files=input_files,
+            output_files=output_files,
+            notes=notes,
+            status="completed"
+        )
+        
+        self.module_iterations[module].append(iteration)
+        return iteration_num
+    
+    def get_module_iteration_count(self, module: str) -> int:
+        """Get the number of iterations for a module."""
+        return len(self.module_iterations.get(module, []))
+    
+    def get_latest_iteration(self, module: str) -> Optional[ModuleIteration]:
+        """Get the latest iteration for a module."""
+        iterations = self.module_iterations.get(module, [])
+        return iterations[-1] if iterations else None
+    
+    def save_state(self) -> None:
+        """Save state to JSON file."""
+        state_file = self.project_dir / ".research_state.json"
+        state_data = self.model_dump(mode="json")
+        # Convert Path objects to strings for JSON serialization
+        state_data["project_dir"] = str(state_data["project_dir"])
+        state_data["plot_paths"] = [str(p) for p in state_data["plot_paths"]]
+        state_data["code_files"] = [str(p) for p in state_data["code_files"]]
+        state_data["intermediate_analyses"] = [str(p) for p in state_data["intermediate_analyses"]]
+        
+        import json
+        with open(state_file, "w") as f:
+            json.dump(state_data, f, indent=2)
+    
+    @classmethod
+    def load_state(cls, project_dir: Path) -> Optional["ResearchState"]:
+        """Load state from JSON file."""
+        state_file = project_dir / ".research_state.json"
+        if not state_file.exists():
+            return None
+        
+        import json
+        with open(state_file, "r") as f:
+            state_data = json.load(f)
+        
+        # Convert string paths back to Path objects
+        state_data["project_dir"] = Path(state_data["project_dir"])
+        state_data["plot_paths"] = [Path(p) for p in state_data["plot_paths"]]
+        state_data["code_files"] = [Path(p) for p in state_data["code_files"]]
+        state_data["intermediate_analyses"] = [Path(p) for p in state_data["intermediate_analyses"]]
+        
+        return cls(**state_data)
 
     def add_agent_interaction(self, agent: str, prompt: str, response: str) -> None:
         """Log an agent interaction."""

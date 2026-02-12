@@ -128,8 +128,16 @@ Provide specific feedback on scientific rigor and validity.
     method_file = output_dir / "methodology.md"
     state.save_to_file(method_file, final_methodology)
     state.methodology = methodology
+    
+    # Track this iteration
+    iteration_num = state.add_module_iteration(
+        module="methodology",
+        input_files=["output/idea.md", "output/literature.md", "input/data_description.md"],
+        output_files=["output/methodology.md"],
+        notes="Methodology development with engineer and analyst review"
+    )
 
-    console.print(f"[green]✓ Methodology saved to {method_file}[/green]")
+    console.print(f"[green]✓ Methodology saved to {method_file} (iteration {iteration_num})[/green]")
 
     if not prompt_user_review(method_file, mode):
         return

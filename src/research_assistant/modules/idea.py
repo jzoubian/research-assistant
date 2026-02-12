@@ -179,8 +179,17 @@ Format as a polished research idea ready for development.
     idea_file = output_dir / "idea.md"
     state.save_to_file(idea_file, final_idea)
     state.idea = final_idea
+    
+    # Track this iteration
+    iteration_num = state.add_module_iteration(
+        module="idea",
+        input_files=["input/data_description.md"],
+        output_files=["output/idea.md", "output/01_initial_ideas.md", "output/02_critique.md", 
+                      "output/03_refined_ideas.md", "output/04_final_critique.md"],
+        notes="5-step idea generation and refinement process completed"
+    )
 
-    console.print(f"[green]✓ Final idea saved to {idea_file}[/green]")
+    console.print(f"[green]✓ Final idea saved to {idea_file} (iteration {iteration_num})[/green]")
 
     if not prompt_user_review(idea_file, mode):
         return
