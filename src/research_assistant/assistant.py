@@ -71,15 +71,25 @@ class ResearchAssistant:
         # Load existing state from files
         self.state.load_from_files()
         
+        # Display resource configuration
+        if self.state.resource_manager:
+            if self.state.resource_manager.resources:
+                console.print("\n" + self.state.resource_manager.get_resource_summary())
+            else:
+                console.print("\n[yellow]⚠ No resource configuration found. Using system defaults.[/yellow]")
+                console.print("[dim]Run 'research-assistant resources <project> --configure' to set up resources.[/dim]")
+                self.state.resource_manager.create_default_resources()
+                self.state.resource_manager.save_resources()
+        
         # Initialize environment for code execution
-        console.print(f"[cyan]Initializing {self.state.env_manager} environment...[/cyan]")
+        console.print(f"\n[cyan]Initializing {self.state.env_manager} environment...[/cyan]")
         env_success = self.env_manager.initialize_environment()
         if env_success:
             console.print(f"[green]✓ {self.state.env_manager} environment ready[/green]")
         else:
             console.print(f"[yellow]⚠ {self.state.env_manager} initialization failed, code execution may not work[/yellow]")
 
-        console.print("[bold green]✓ Research Assistant initialized[/bold green]\n")
+        console.print("\n[bold green]✓ Research Assistant initialized[/bold green]\n")
 
     def load_data_description(self, file_path: str) -> None:
         """Load data description from file.

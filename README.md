@@ -18,6 +18,7 @@ This project reimagines the [Denario scientific discovery pipeline](https://gith
 - **Reproducible Execution**: Isolated environments (pixi, apptainer, nix, guix) for code execution
 - **State Persistence**: Automatic save/resume of research progress
 - **Iteration History**: Track all iterations with timestamps, inputs, outputs, and notes
+- **Resource Management**: Specify and respect computational constraints (GPU, cluster, memory limits)
 
 ## Installation
 
@@ -77,7 +78,81 @@ research-assistant run --project my_research --start-from analysis
 # View iteration history
 research-assistant iterations my_research
 research-assistant iterations my_research --module analysis
+
+# Configure computational resources
+research-assistant resources my_research --configure
+research-assistant resources my_research --show
 ```
+
+## Resource Management
+
+The assistant can track and respect your available computational resources and constraints. This ensures that generated analysis code and execution strategies are appropriate for your hardware.
+
+### Configuring Resources
+
+```bash
+# Interactive configuration
+research-assistant resources my_research --configure
+
+# View current configuration
+research-assistant resources my_research --show
+```
+
+### Supported Resources
+
+**Hardware:**
+- CPU cores and memory
+- GPU availability, type, count, and memory
+- Cluster/HPC access (SLURM, PBS, SGE)
+- Storage and scratch space
+
+**Software:**
+- MPI availability
+- OpenMP support
+- Internet access
+
+**Constraints:**
+- Maximum memory per job
+- Maximum CPUs per job
+- Maximum GPU per job
+- Maximum runtime limits
+- Resource quotas
+
+### Resource File Format
+
+Resources are stored in `resources.json`:
+
+```json
+{
+  "resources": {
+    "cpu_cores": 64,
+    "cpu_memory_gb": 256,
+    "gpu_available": true,
+    "gpu_count": 4,
+    "gpu_type": "A100",
+    "gpu_memory_gb": 80,
+    "cluster_available": true,
+    "cluster_type": "SLURM",
+    "cluster_partition": "gpu",
+    "mpi_available": true,
+    "openmp_available": true
+  },
+  "constraints": {
+    "max_memory_per_job_gb": 200,
+    "max_cpu_per_job": 32,
+    "max_gpu_per_job": 2,
+    "max_runtime_hours": 48,
+    "has_quota": true,
+    "quota_details": "1000 GPU-hours per month"
+  }
+}
+```
+
+The agents will use this information to:
+- Generate appropriate parallelization strategies
+- Respect memory and runtime limits
+- Generate cluster submission scripts
+- Avoid requesting unavailable resources
 
 ## Environment Management
 

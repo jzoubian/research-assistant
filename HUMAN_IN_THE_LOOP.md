@@ -204,6 +204,189 @@ State is saved to `.research_state.json` in the project directory. This file con
 
 View complete iteration history from the CLI.
 
+## 6. Resource Management
+
+Specify and manage available computational resources to ensure generated code respects hardware constraints.
+
+### Resource Configuration
+
+**Interactive Setup:**
+```bash
+research-assistant resources my_research --configure
+```
+
+This will prompt for:
+- CPU cores and RAM
+- GPU availability, type, count, and memory
+- Cluster/HPC access and scheduler type
+- MPI and OpenMP availability
+- Resource constraints (max memory, CPUs, runtime)
+- Quota information
+
+**View Configuration:**
+```bash
+research-assistant resources my_research --show
+```
+
+**Manual Configuration:**
+
+Edit `resources.json` directly:
+```json
+{
+  "resources": {
+    "cpu_cores": 64,
+    "cpu_memory_gb": 256,
+    "gpu_available": true,
+    "gpu_count": 4,
+    "gpu_type": "A100",
+    "gpu_memory_gb": 80,
+    "cluster_available": true,
+    "cluster_type": "SLURM",
+    "cluster_partition": "gpu",
+    "max_nodes": 10,
+    "max_walltime_hours": 72,
+    "storage_gb": 10000,
+    "scratch_dir": "/scratch/username",
+    "mpi_available": true,
+    "openmp_available": true,
+    "internet_access": true
+  },
+  "constraints": {
+    "max_memory_per_job_gb": 200,
+    "max_cpu_per_job": 32,
+    "max_gpu_per_job": 2,
+    "max_runtime_hours": 48,
+    "prefer_cpu": false,
+    "prefer_parallel": true,
+    "has_quota": true,
+    "quota_details": "1000 GPU-hours per month, 50TB storage",
+    "required_packages": ["numpy", "scipy", "mpi4py"],
+    "forbidden_packages": ["tensorflow"]
+  }
+}
+```
+
+### How Resources Are Used
+
+The resource manager provides information to the agents that:
+
+1. **Code Generation**: Engineers write code that respects memory limits and available parallelization
+2. **Execution Planning**: Analysts determine optimal execution strategies based on resources
+3. **Cluster Scripts**: Automatic generation of SLURM/PBS submission scripts with appropriate resource requests
+4. **Validation**: Requirements validation before execution to prevent resource violations
+
+**Example - GPU Code Generation:**
+```python
+# If resources show GPU available:
+resources = state.resource_manager.resources
+if resources.gpu_available:
+    # Agent will generate GPU-accelerated code
+    import cupy as cp
+    data_gpu = cp.array(data)
+else:
+    # Falls back to CPU code
+    import numpy as np
+    data_cpu = np.array(data)
+```
+
+**Example - Cluster Submission:**
+```python
+# Generate SLURM script based on resources
+script = state.resource_manager.generate_cluster_script(
+    job_name="analysis",
+    command="pixi run python analysis.py"
+)
+# Automatically includes:
+# - Partition from resources.cluster_partition
+# - GPU requests if available
+# - Memory limits from constraints
+# - Walltime from constraints
+```
+
+### Resource Validation
+
+Before execution, the system can validate requirements:
+
+```python
+requirements = {
+    'min_cpu_cores': 16,
+    'min_memory_gb': 64,
+    'requires_gpu': True,
+    'min_gpu_memory_gb': 40,
+    'requires_mpi': True,
+}
+
+can_run, issues = state.resource_manager.validate_requirements(requirements)
+if not can_run:
+    print("Cannot run analysis:")
+    for issue in issues:
+        print(f"  - {issue}")
+```
+
+### Use Cases
+
+**1. Laptop Development:**
+```json
+{
+  "resources": {
+    "cpu_cores": 8,
+    "cpu_memory_gb": 16,
+    "gpu_available": false
+  },
+  "constraints": {
+    "max_memory_per_job_gb": 12,
+    "max_runtime_hours": 2
+  }
+}
+```
+Agents will generate lightweight, CPU-only code suitable for prototyping.
+
+**2. Workstation:**
+```json
+{
+  "resources": {
+    "cpu_cores": 32,
+    "cpu_memory_gb": 128,
+    "gpu_available": true,
+    "gpu_count": 2,
+    "gpu_type": "RTX4090",
+    "gpu_memory_gb": 24
+  }
+}
+```
+Agents can use GPU acceleration and multi-GPU strategies.
+
+**3. HPC Cluster:**
+```json
+{
+  "resources": {
+    "cpu_cores": 128,
+    "cpu_memory_gb": 512,
+    "gpu_available": true,
+    "gpu_count": 8,
+    "gpu_type": "A100",
+    "gpu_memory_gb": 80,
+    "cluster_available": true,
+    "cluster_type": "SLURM",
+    "cluster_partition": "gpu",
+    "max_nodes": 4,
+    "mpi_available": true
+  },
+  "constraints": {
+    "max_walltime_hours": 72,
+    "has_quota": true,
+    "quota_details": "10000 GPU-hours/month"
+  }
+}
+```
+Agents will generate:
+- MPI-parallel code for multi-node execution
+- SLURM submission scripts
+- Efficient GPU utilization strategies
+- Code that respects walltime limits
+
+## 7. Iteration History Viewing (continued)
+
 **All Modules Summary:**
 ```bash
 research-assistant iterations my_research

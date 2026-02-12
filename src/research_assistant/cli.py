@@ -57,13 +57,21 @@ Describe the scientific domain, key questions of interest, and any constraints.
     # Create initial state file with env manager preference
     from research_assistant.state import ResearchState
     state = ResearchState(project_dir=project_dir, env_manager=env_manager)
+    
+    # Initialize default resources
+    if state.resource_manager:
+        state.resource_manager.create_default_resources()
+        state.resource_manager.save_resources()
+    
     state.save_state()
 
     console.print(f"[green]✓ Initialized research project at {project_dir}[/green]")
     console.print(f"[green]✓ Environment manager: {env_manager}[/green]")
+    console.print(f"[green]✓ Default resources configured[/green]")
     console.print(f"\n[yellow]Next steps:[/yellow]")
-    console.print(f"1. Edit {project_dir}/input/data_description.md")
-    console.print(f"2. Run: research-assistant idea --project {project_dir}")
+    console.print(f"1. Configure resources: research-assistant resources {project_name} --configure")
+    console.print(f"2. Edit {project_dir}/input/data_description.md")
+    console.print(f"3. Run: research-assistant idea --project {project_dir}")
 
 
 @app.command()
@@ -290,6 +298,105 @@ def iterations(
         
         console.print(table)
         console.print(f"\n[dim]Use --module to see detailed iteration history for a specific module[/dim]")
+
+
+@app.command()
+def resources(
+    project: str = typer.Argument(..., help="Path to research project"),
+    configure: bool = typer.Option(False, "--configure", help="Interactively configure resources"),
+    show: bool = typer.Option(False, "--show", help="Show current resource configuration"),
+):
+    """Manage computational resources and constraints."""
+    from research_assistant.state import ResearchState
+    from research_assistant.resources import ComputeResource, ResourceConstraints
+    from rich.prompt import Prompt, Confirm
+    
+    project_dir = Path(project).resolve()
+    
+    try:
+        state = ResearchState.load_state(project_dir)
+    except FileNotFoundError:
+        console.print(f"[red]No project state found at {project_dir}[/red]")
+        raise typer.Exit(1)
+    
+    if not state.resource_manager:
+        console.print(f"[red]Resource manager not available[/red]")
+        raise typer.Exit(1)
+    
+    if show or (not configure):
+        # Show current resources
+        console.print(state.resource_manager.get_resource_summary())
+        return
+    
+    if configure:
+        console.print("[bold cyan]Configure Computational Resources[/bold cyan]\n")
+        
+        # CPU configuration
+        cpu_cores = Prompt.ask("CPU cores available", default=str(state.resource_manager.resources.cpu_cores or "4"))
+        cpu_memory = Prompt.ask("RAM available (GB)", default=str(state.resource_manager.resources.cpu_memory_gb or "8"))
+        
+        # GPU configuration
+        gpu_available = Confirm.ask("GPU available?", default=state.resource_manager.resources.gpu_available)
+        gpu_count = None
+        gpu_type = None
+        gpu_memory = None
+        if gpu_available:
+            gpu_count = Prompt.ask("Number of GPUs", default="1")
+            gpu_type = Prompt.ask("GPU type (e.g., A100, V100, RTX4090)", default="")
+            gpu_memory = Prompt.ask("GPU memory per device (GB)", default="")
+        
+        # Cluster configuration
+        cluster_available = Confirm.ask("Cluster/HPC access available?", default=state.resource_manager.resources.cluster_available)
+        cluster_type = None
+        cluster_partition = None
+        if cluster_available:
+            cluster_type = Prompt.ask("Cluster type", choices=["SLURM", "PBS", "SGE"], default="SLURM")
+            cluster_partition = Prompt.ask("Default partition/queue", default="")
+        
+        # MPI/OpenMP
+        mpi_available = Confirm.ask("MPI available?", default=state.resource_manager.resources.mpi_available)
+        
+        # Update resources
+        state.resource_manager.resources = ComputeResource(
+            cpu_cores=int(cpu_cores),
+            cpu_memory_gb=float(cpu_memory),
+            gpu_available=gpu_available,
+            gpu_count=int(gpu_count) if gpu_count and gpu_available else None,
+            gpu_type=gpu_type if gpu_type and gpu_available else None,
+            gpu_memory_gb=float(gpu_memory) if gpu_memory and gpu_available else None,
+            cluster_available=cluster_available,
+            cluster_type=cluster_type if cluster_available else None,
+            cluster_partition=cluster_partition if cluster_partition and cluster_available else None,
+            mpi_available=mpi_available,
+            openmp_available=True,
+            internet_access=True,
+        )
+        
+        # Constraints
+        console.print("\n[bold cyan]Configure Resource Constraints[/bold cyan]\n")
+        
+        max_memory = Prompt.ask("Max memory per job (GB)", default=str(float(cpu_memory) * 0.8))
+        max_cpu = Prompt.ask("Max CPUs per job", default=cpu_cores)
+        max_runtime = Prompt.ask("Max runtime per job (hours)", default="")
+        
+        has_quota = Confirm.ask("Resource quota exists?", default=False)
+        quota_details = None
+        if has_quota:
+            quota_details = Prompt.ask("Quota details")
+        
+        state.resource_manager.constraints = ResourceConstraints(
+            max_memory_per_job_gb=float(max_memory),
+            max_cpu_per_job=int(max_cpu),
+            max_runtime_hours=float(max_runtime) if max_runtime else None,
+            has_quota=has_quota,
+            quota_details=quota_details if has_quota else None,
+            prefer_parallel=True,
+        )
+        
+        # Save
+        state.resource_manager.save_resources()
+        console.print("\n[green]✓ Resources configured and saved[/green]\n")
+        console.print(state.resource_manager.get_resource_summary())
 
 
 if __name__ == "__main__":

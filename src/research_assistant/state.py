@@ -4,6 +4,11 @@ from typing import Optional
 from pathlib import Path
 from pydantic import BaseModel, Field
 
+try:
+    from research_assistant.resources import ResourceManager
+except ImportError:
+    ResourceManager = None
+
 
 class ModuleIteration(BaseModel):
     """Track a single iteration of a module."""
@@ -21,7 +26,7 @@ class ResearchState(BaseModel):
     # Project metadata
     project_dir: Path
     data_description: str = ""
-    env_manager: str = "pixi"  # pixi, conda, venv, docker
+    env_manager: str = "pixi"  # pixi, apptainer, nix, guix
 
     # Research artifacts
     idea: str = ""
@@ -43,6 +48,18 @@ class ResearchState(BaseModel):
     
     # Iteration tracking per module
     module_iterations: dict[str, list[ModuleIteration]] = Field(default_factory=dict)
+    
+    def __init__(self, **data):
+        """Initialize state and set up resource manager."""
+        super().__init__(**data)
+        # Ensure project directory exists
+        self.project_dir.mkdir(parents=True, exist_ok=True)
+        # Initialize resource manager if available
+        if ResourceManager:
+            self.resource_manager = ResourceManager(self.project_dir)
+            self.resource_manager.load_resources()
+        else:
+            self.resource_manager = None
 
     class Config:
         arbitrary_types_allowed = True
