@@ -221,8 +221,12 @@ class AgentOrchestrator:
                     session = self.agents[agent_name]["session"]
                     # Continue loop with same timeout increment
             except Exception as e:
-                # Check if it's a session-related error
-                if "Session not found" in str(e) or "session" in str(e).lower():
+                # Check for quota/session errors
+                error_str = str(e).lower()
+                if "402" in error_str or "no quota" in error_str:
+                    console.print(f"[red]Session error: 402 You have no quota. Stopping execution.[/red]")
+                    raise RuntimeError("Session error: 402 You have no quota. Stopping execution.")
+                elif "session not found" in error_str or "session" in error_str:
                     console.print(f"[yellow]⚠ Session error: {e}[/yellow]")
                     console.print("[yellow]Attempting to recover session...[/yellow]")
                     await self._ensure_session_valid(agent_name)
