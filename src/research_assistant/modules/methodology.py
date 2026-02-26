@@ -129,15 +129,17 @@ Provide specific feedback on scientific rigor and validity.
     state.save_to_file(method_file, final_methodology)
     state.methodology = methodology
     
+    # Save state before committing
+    state.save_state(auto_commit=False)
     # Commit methodology generation
     state.commit_step("methodology", "generation", "Completed methodology development with engineer and analyst review")
-    state.save_state()
 
     console.print(f"[green]✓ Methodology saved to {method_file}[/green]")
 
     if not prompt_user_review(method_file, mode):
         return
     
+    # Save state before committing
+    state.save_state(auto_commit=False)
     # Commit user review
     state.commit_user_input("methodology", "reviewed", "User reviewed and approved methodology")
-    state.save_state()

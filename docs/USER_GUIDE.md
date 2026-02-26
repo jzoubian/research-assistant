@@ -379,25 +379,45 @@ research-assistant iterations iris_classification --module idea
 
 **Output**:
 ```
-Iteration History for Module: idea (from Git)
+Iteration History for IDEA
 
 Module: idea
-  Iteration count: 2
-  Total commits: 4
-  Last activity: 2026-02-25 10:45:22
+  Iteration count: 0
+  Total commits: 2
 
 Recent commits:
-  abc1234 [idea] Iteration 2: Focus more on visualization techniques
-          2026-02-25 10:45:22
+  a9033dc1 [idea] generation: Completed 5-step idea generation and refinement
+           2026-02-26 14:16:55
   
-  def5678 [idea] User iterate: Focus more on visualization techniques
-          2026-02-25 10:45:20
-  
-  ghi9012 [idea] step: Completed 5-step idea generation and refinement
-          2026-02-25 10:30:15
-  
-  jkl3456 [idea] User reviewed: User reviewed and approved idea
-          2026-02-25 10:30:18
+  26692189 [idea] completed: Module marked as complete
+           2026-02-26 10:58:47
+```
+
+**Note**: The `iterations` command counts explicit "Iteration N" markers in commit messages. The idea module doesn't use numbered iterations (it has a fixed 5-step workflow), so `iteration_count` will be 0. To see full history, use Git directly:
+
+```bash
+cd iris_classification
+git log --grep="\[idea\]" --oneline
+```
+
+**For the analysis module** (which has numbered iterations):
+```bash
+research-assistant iterations iris_classification --module analysis
+```
+
+```
+Iteration History for ANALYSIS
+
+Module: analysis
+  Iteration count: 2
+  Total commits: 8
+
+Recent commits:
+  abc1234 [analysis] Iteration 2: Completed analysis iteration
+  def5678 [analysis] execution_success: Iteration 2, attempt 1
+  ghi9012 [analysis] code_generation: Generated code for iteration 2
+  jkl3456 [analysis] Iteration 1: Completed analysis iteration
+  ...
 ```
 
 **Feature Highlight**: Complete audit trail stored in Git, including:

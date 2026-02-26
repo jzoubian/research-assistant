@@ -180,15 +180,19 @@ Format as a polished research idea ready for development.
     state.save_to_file(idea_file, final_idea)
     state.idea = final_idea
     
-    # Commit idea generation
+    # Save state before committing (so the commit includes the updated state)
+    state.save_state(auto_commit=False)
+    
+    # Commit idea generation with descriptive message
     state.commit_step("idea", "generation", "Completed 5-step idea generation and refinement")
-    state.save_state()
 
     console.print(f"[green]✓ Final idea saved to {idea_file}[/green]")
 
     if not prompt_user_review(idea_file, mode):
         return
     
-    # Commit user review
+    # Save state before committing user review
+    state.save_state(auto_commit=False)
+    
+    # Commit user review with descriptive message
     state.commit_user_input("idea", "reviewed", "User reviewed and approved idea")
-    state.save_state()

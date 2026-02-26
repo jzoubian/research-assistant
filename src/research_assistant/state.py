@@ -76,9 +76,10 @@ class ResearchState(BaseModel):
     def mark_module_complete(self, module: str) -> None:
         """Mark a module as completed and commit to Git."""
         self.completed_modules.add(module)
+        # Save state before committing (so the commit includes the updated state)
+        self.save_state(auto_commit=False)
         if self.git_tracker:
             self.git_tracker.commit_step(module, "completed", "Module marked as complete")
-        self.save_state()
 
     def is_module_complete(self, module: str) -> bool:
         """Check if a module is completed."""
@@ -183,8 +184,13 @@ class ResearchState(BaseModel):
         if self.git_tracker:
             self.git_tracker.print_module_status(module)
     
-    def save_state(self) -> None:
-        """Save state to JSON file and commit to Git."""
+    def save_state(self, auto_commit: bool = True) -> None:
+        """Save state to JSON file.
+        
+        Args:
+            auto_commit: Whether to automatically commit changes to Git.
+                        Set to False if you've already made an explicit commit.
+        """
         state_file = self.project_dir / ".research_state.json"
         state_data = self.model_dump(mode="json")
         # Convert Path objects to strings for JSON serialization
@@ -197,8 +203,8 @@ class ResearchState(BaseModel):
         with open(state_file, "w") as f:
             json.dump(state_data, f, indent=2)
         
-        # Commit state to Git if there are actual changes
-        if self.git_tracker:
+        # Commit state to Git if auto_commit is enabled and there are changes
+        if auto_commit and self.git_tracker:
             self.git_tracker.stage_files([".research_state.json"])
             if self.git_tracker.has_staged_changes():
                 self.git_tracker.commit("Update research state")

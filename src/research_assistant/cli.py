@@ -103,8 +103,8 @@ def idea(
         if iterate:
             console.print(f"[green]Starting new iteration for idea module[/green]")
             if notes:
+                assistant.state.save_state(auto_commit=False)
                 assistant.state.commit_user_input("idea", "iterate", notes)
-            assistant.state.save_state()
         
         await assistant.generate_idea(mode=mode)
         await assistant.cleanup()
@@ -130,8 +130,8 @@ def literature(
         if iterate:
             console.print(f"[green]Starting new iteration for literature module[/green]")
             if notes:
+                assistant.state.save_state(auto_commit=False)
                 assistant.state.commit_user_input("literature", "iterate", notes)
-            assistant.state.save_state()
         
         await assistant.review_literature(mode=mode)
         await assistant.cleanup()
@@ -157,8 +157,8 @@ def methodology(
         if iterate:
             console.print(f"[green]Starting new iteration for methodology module[/green]")
             if notes:
+                assistant.state.save_state(auto_commit=False)
                 assistant.state.commit_user_input("methodology", "iterate", notes)
-            assistant.state.save_state()
         
         await assistant.develop_methodology(mode=mode)
         await assistant.cleanup()
@@ -185,8 +185,8 @@ def analysis(
         if iterate:
             console.print(f"[green]Starting new iteration for analysis module[/green]")
             if notes:
+                assistant.state.save_state(auto_commit=False)
                 assistant.state.commit_user_input("analysis", "iterate", notes)
-            assistant.state.save_state()
         
         await assistant.execute_analysis(mode=mode, require_approval=approve_code)
         await assistant.cleanup()
@@ -213,8 +213,8 @@ def paper(
         if iterate:
             console.print(f"[green]Starting new iteration for paper module[/green]")
             if notes:
+                assistant.state.save_state(auto_commit=False)
                 assistant.state.commit_user_input("paper", "iterate", notes)
-            assistant.state.save_state()
         
         await assistant.write_paper(mode=mode, journal_format=format)
         await assistant.cleanup()
@@ -240,8 +240,8 @@ def review(
         if iterate:
             console.print(f"[green]Starting new iteration for review module[/green]")
             if notes:
+                assistant.state.save_state(auto_commit=False)
                 assistant.state.commit_user_input("review", "iterate", notes)
-            assistant.state.save_state()
         
         await assistant.review_paper(mode=mode)
         await assistant.cleanup()
@@ -359,35 +359,29 @@ def iterations(
         
         status = state.git_tracker.get_module_status(module)
         
-        if status['iteration_count'] == 0:
-            console.print(f"[yellow]No iterations found for module: {module}[/yellow]")
+        console.print(f"Module: {module}")
+        console.print(f"  Iteration count: {status['iteration_count']}")
+        console.print(f"  Total commits: {status['total_commits']}\n")
+        
+        if status['iteration_count'] == 0 and status['total_commits'] == 0:
+            console.print(f"[yellow]No commits found for module: {module}[/yellow]")
+            console.print(f"[dim]Tip: Run 'cd {project_dir} && git log --grep=\"[{module}]\" --oneline' to check Git history[/dim]")
             return
         
-        console.print(f"Total iterations: {status['iteration_count']}")
-        console.print(f"Iteration numbers: {', '.join(map(str, status['iterations']))}")
-        console.print(f"Total commits: {status['total_commits']}\n")
+        if status['iteration_count'] == 0:
+            console.print(f"[dim]Note: This module uses a fixed workflow (not numbered iterations).[/dim]")
+            console.print(f"[dim]Use 'cd {project_dir} && git log --grep=\"[{module}]\"' to view full history.[/dim]\n")
+        else:
+            console.print(f"Iteration numbers: {', '.join(map(str, status['iterations']))}\n")
         
-        # Show commit table
-        table = Table(show_header=True, header_style="bold cyan")
-        table.add_column("Iteration", style="yellow")
-        table.add_column("Commit", style="yellow")
-        table.add_column("Message", style="white")
-        table.add_column("Date", style="dim")
+        # Show commit table (recent commits)
+        if status['all_commits']:
+            console.print("[bold]Recent commits:[/bold]")
+            for commit in status['all_commits'][:5]:  # Show last 5
+                console.print(f"  [yellow]{commit['hash'][:8]}[/yellow] {commit['message']}")
+                console.print(f"           [dim]{commit['date'][:19]}[/dim]\n")
         
-        for commit in status['all_commits'][:20]:  # Show last 20
-            # Extract iteration number if present
-            import re
-            iter_match = re.search(r'Iteration (\d+)', commit['message'])
-            iter_num = iter_match.group(1) if iter_match else "-"
-            
-            table.add_row(
-                iter_num,
-                commit['hash'],
-                commit['message'][:50] + "..." if len(commit['message']) > 50 else commit['message'],
-                commit['date'][:19]
-            )
-        
-        console.print(table)
+        return
     else:
         # Show summary for all modules
         console.print("\n[bold cyan]Iteration Summary for All Modules[/bold cyan]\n")

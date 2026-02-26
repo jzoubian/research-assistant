@@ -119,9 +119,10 @@ Provide complete Python code only.
         state.save_to_file(code_file, code)
         console.print(f"[green]✓ Code saved to {code_file}[/green]")
         
+        # Save state before committing
+        state.save_state(auto_commit=False)
         # Commit code generation
         state.commit_step("analysis", "code_generation", f"Generated code for iteration {analysis_iteration}")
-        state.save_state()
 
         # Step 2: Execute code (no approval required - automatic execution)
         # Inner loop: Debugging until successful execution
@@ -174,9 +175,10 @@ Run the code using the execute_code tool and report:
                 execution_successful = True
                 console.print("[green]✓ Code executed successfully[/green]")
                 
+                # Save state before committing
+                state.save_state(auto_commit=False)
                 # Commit successful execution
                 state.commit_step("analysis", "execution_success", f"Iteration {analysis_iteration}, attempt {debug_attempt}")
-                state.save_state()
 
                 # Step 4: Analyst interprets results
                 console.print("[cyan]Analyst interpreting results...[/cyan]")
@@ -223,9 +225,10 @@ Provide:
 {analysis_results}
 """)
                 
+                # Save state before committing
+                state.save_state(auto_commit=False)
                 # Commit iteration completion
                 state.commit_iteration("analysis", analysis_iteration, "Completed analysis iteration")
-                state.save_state()
 
                 console.print(f"[green]✓ Analysis iteration {analysis_iteration} complete[/green]")
 
@@ -265,9 +268,10 @@ Analyze the error and provide corrected code that fixes the issue.
                 code_file = code_dir / f"analysis_{analysis_iteration:02d}_debug{debug_attempt}.py"
                 state.save_to_file(code_file, code)
                 
+                # Save state before committing
+                state.save_state(auto_commit=False)
                 # Commit debug attempt
                 state.commit_debug_attempt("analysis", analysis_iteration, debug_attempt, error_summary)
-                state.save_state()
 
         if not execution_successful:
             console.print(f"[red]Failed to execute code after {max_debug_attempts} attempts[/red]")
@@ -279,9 +283,10 @@ Analyze the error and provide corrected code that fixes the issue.
     final_analysis_file = output_dir / "analysis.md"
     state.save_to_file(final_analysis_file, state.analysis)
     
+    # Save state before committing
+    state.save_state(auto_commit=False)
     # Commit final analysis
     state.commit_step("analysis", "finalized", f"Completed {analysis_iteration} iterations")
-    state.save_state()
 
     console.print(f"\n[green]✓ Final analysis saved to {final_analysis_file}[/green]")
     console.print(f"[green]✓ Code files saved to {code_dir}[/green]")
@@ -306,9 +311,10 @@ Analyze the error and provide corrected code that fixes the issue.
         
         if more_iterations:
             console.print("\n[cyan]Starting additional analysis iterations...[/cyan]")
+            # Save state before committing
+            state.save_state(auto_commit=False)
             # Commit user decision
             state.commit_user_input("analysis", "continued", "User requested more iterations")
-            state.save_state()
             
             # Recursively call this function to continue analysis
             await run_analysis_execution(
@@ -316,9 +322,10 @@ Analyze the error and provide corrected code that fixes the issue.
             )
         else:
             console.print("[green]✓ Analysis workflow complete[/green]")
+            # Save state before committing
+            state.save_state(auto_commit=False)
             # Commit user decision
             state.commit_user_input("analysis", "completed", "User confirmed completion")
-            state.save_state()
     else:
         # In automatic mode, just finish
         console.print("[green]✓ Analysis workflow complete[/green]")

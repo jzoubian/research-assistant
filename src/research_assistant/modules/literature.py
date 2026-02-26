@@ -127,15 +127,17 @@ Provide feedback on what should be improved or added.
     state.save_to_file(lit_file, final_literature)
     state.literature = literature
     
+    # Save state before committing
+    state.save_state(auto_commit=False)
     # Commit literature generation
     state.commit_step("literature", "generation", "Completed literature search and synthesis with analyst review")
-    state.save_state()
 
     console.print(f"[green]✓ Literature review saved to {lit_file}[/green]")
 
     if not prompt_user_review(lit_file, mode):
         return
     
+    # Save state before committing
+    state.save_state(auto_commit=False)
     # Commit user review
     state.commit_user_input("literature", "reviewed", "User reviewed and approved literature")
-    state.save_state()
