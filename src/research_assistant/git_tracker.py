@@ -181,6 +181,15 @@ temp/
         status = self.get_status()
         return bool(status.strip())
     
+    def has_staged_changes(self) -> bool:
+        """Check if there are staged changes ready to commit.
+        
+        Returns:
+            True if there are staged changes
+        """
+        result = self._run_git(["diff", "--cached", "--quiet"], check=False)
+        return result.returncode != 0
+    
     def stage_files(self, patterns: List[str]) -> None:
         """Stage files matching patterns.
         
@@ -234,9 +243,13 @@ temp/
             description: Optional description
             
         Returns:
-            Commit hash
+            Commit hash or None if no changes to commit
         """
         self.stage_all_changes()
+        
+        # Only commit if there are staged changes
+        if not self.has_staged_changes():
+            return None
         
         message_parts = [f"[{module}] {step}"]
         if description:
@@ -254,9 +267,13 @@ temp/
             description: Optional description
             
         Returns:
-            Commit hash
+            Commit hash or None if no changes to commit
         """
         self.stage_all_changes()
+        
+        # Only commit if there are staged changes
+        if not self.has_staged_changes():
+            return None
         
         message_parts = [f"[{module}] Iteration {iteration}"]
         if description:
@@ -275,9 +292,13 @@ temp/
             error: Error message summary
             
         Returns:
-            Commit hash
+            Commit hash or None if no changes to commit
         """
         self.stage_all_changes()
+        
+        # Only commit if there are staged changes
+        if not self.has_staged_changes():
+            return None
         
         message_parts = [f"[{module}] Iteration {iteration} - Debug attempt {attempt}"]
         if error:
@@ -297,9 +318,13 @@ temp/
             notes: Optional user notes
             
         Returns:
-            Commit hash
+            Commit hash or None if no changes to commit
         """
         self.stage_all_changes()
+        
+        # Only commit if there are staged changes
+        if not self.has_staged_changes():
+            return None
         
         message_parts = [f"[{module}] User {action}"]
         if notes:

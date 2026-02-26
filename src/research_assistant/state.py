@@ -197,10 +197,10 @@ class ResearchState(BaseModel):
         with open(state_file, "w") as f:
             json.dump(state_data, f, indent=2)
         
-        # Commit state to Git
+        # Commit state to Git if there are actual changes
         if self.git_tracker:
             self.git_tracker.stage_files([".research_state.json"])
-            if self.git_tracker.has_changes():
+            if self.git_tracker.has_staged_changes():
                 self.git_tracker.commit("Update research state")
     
     @classmethod

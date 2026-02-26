@@ -297,18 +297,24 @@ random_seed = 42
 
 ---
 
-### Step 4: Generate Research Ideas (Interactive Mode)
+### Step 4: Generate Research Ideas
 
+**Interactive mode** (default - prompts for review at each step):
 ```bash
-research-assistant idea --project iris_classification --interactive
+research-assistant idea --project iris_classification
+```
+
+**Non-interactive mode** (runs all steps automatically):
+```bash
+research-assistant idea --project iris_classification --no-interactive
 ```
 
 **What happens**:
 
 1. **Agent reads context**: The Idea Maker agent reads your data description
-2. **Generates proposals**: Creates multiple research angle suggestions
+2. **Generates proposals**: Creates multiple research angle suggestions through 5 sub-steps
 3. **Outputs to file**: Writes to `output/idea.md`
-4. **Waits for review**: Assistant pauses, prompting you to review
+4. **Waits for review** (interactive mode only): Assistant pauses after each sub-step, prompting you to review
 
 **Sample output** (`output/idea.md`):
 

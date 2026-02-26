@@ -11,14 +11,6 @@ from research_assistant import ResearchAssistant
 
 app = typer.Typer(help="Personal Research Assistant CLI")
 console = Console()
-    metadata = {
-        "iteration": iteration_num,
-        "timestamp": timestamp,
-        "module": module,
-        "preserved_files": output_files
-    }
-    import json
-    (iterations_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
 
 @app.command()
