@@ -11,6 +11,14 @@ from research_assistant import ResearchAssistant
 
 app = typer.Typer(help="Personal Research Assistant CLI")
 console = Console()
+    metadata = {
+        "iteration": iteration_num,
+        "timestamp": timestamp,
+        "module": module,
+        "preserved_files": output_files
+    }
+    import json
+    (iterations_dir / "metadata.json").write_text(json.dumps(metadata, indent=2))
 
 
 @app.command()
@@ -88,13 +96,24 @@ Describe the scientific domain, key questions of interest, and any constraints.
 def idea(
     project: str = typer.Option(..., help="Path to research project"),
     interactive: bool = typer.Option(True, help="Interactive mode with user reviews"),
+    iterate: bool = typer.Option(False, help="Create a new iteration of this module"),
+    notes: str = typer.Option("", help="Notes for this iteration"),
 ):
     """Generate research idea."""
     async def run():
+        project_path = Path(project).resolve()
         assistant = ResearchAssistant(project_dir=project)
         await assistant.initialize()
         assistant.load_data_description("input/data_description.md")
         mode = "interactive" if interactive else "automatic"
+        
+        # Track iteration if requested
+        if iterate:
+            console.print(f"[green]Starting new iteration for idea module[/green]")
+            if notes:
+                assistant.state.commit_user_input("idea", "iterate", notes)
+            assistant.state.save_state()
+        
         await assistant.generate_idea(mode=mode)
         await assistant.cleanup()
 
@@ -105,12 +124,23 @@ def idea(
 def literature(
     project: str = typer.Option(..., help="Path to research project"),
     interactive: bool = typer.Option(True, help="Interactive mode with user reviews"),
+    iterate: bool = typer.Option(False, help="Create a new iteration of this module"),
+    notes: str = typer.Option("", help="Notes for this iteration"),
 ):
     """Conduct literature review."""
     async def run():
+        project_path = Path(project).resolve()
         assistant = ResearchAssistant(project_dir=project)
         await assistant.initialize()
         mode = "interactive" if interactive else "automatic"
+        
+        # Track iteration if requested
+        if iterate:
+            console.print(f"[green]Starting new iteration for literature module[/green]")
+            if notes:
+                assistant.state.commit_user_input("literature", "iterate", notes)
+            assistant.state.save_state()
+        
         await assistant.review_literature(mode=mode)
         await assistant.cleanup()
 
@@ -121,12 +151,23 @@ def literature(
 def methodology(
     project: str = typer.Option(..., help="Path to research project"),
     interactive: bool = typer.Option(True, help="Interactive mode with user reviews"),
+    iterate: bool = typer.Option(False, help="Create a new iteration of this module"),
+    notes: str = typer.Option("", help="Notes for this iteration"),
 ):
     """Develop research methodology."""
     async def run():
+        project_path = Path(project).resolve()
         assistant = ResearchAssistant(project_dir=project)
         await assistant.initialize()
         mode = "interactive" if interactive else "automatic"
+        
+        # Track iteration if requested
+        if iterate:
+            console.print(f"[green]Starting new iteration for methodology module[/green]")
+            if notes:
+                assistant.state.commit_user_input("methodology", "iterate", notes)
+            assistant.state.save_state()
+        
         await assistant.develop_methodology(mode=mode)
         await assistant.cleanup()
 
@@ -138,12 +179,23 @@ def analysis(
     project: str = typer.Option(..., help="Path to research project"),
     interactive: bool = typer.Option(True, help="Interactive mode with user reviews"),
     approve_code: bool = typer.Option(True, help="Require approval before code execution"),
+    iterate: bool = typer.Option(False, help="Create a new iteration of this module"),
+    notes: str = typer.Option("", help="Notes for this iteration"),
 ):
     """Execute analysis with nested iteration loops."""
     async def run():
+        project_path = Path(project).resolve()
         assistant = ResearchAssistant(project_dir=project)
         await assistant.initialize()
         mode = "interactive" if interactive else "automatic"
+        
+        # Track iteration if requested
+        if iterate:
+            console.print(f"[green]Starting new iteration for analysis module[/green]")
+            if notes:
+                assistant.state.commit_user_input("analysis", "iterate", notes)
+            assistant.state.save_state()
+        
         await assistant.execute_analysis(mode=mode, require_approval=approve_code)
         await assistant.cleanup()
 
@@ -155,12 +207,23 @@ def paper(
     project: str = typer.Option(..., help="Path to research project"),
     interactive: bool = typer.Option(True, help="Interactive mode with user reviews"),
     format: str = typer.Option("nature", help="Journal format (nature, science, prl, etc.)"),
+    iterate: bool = typer.Option(False, help="Create a new iteration of this module"),
+    notes: str = typer.Option("", help="Notes for this iteration"),
 ):
     """Write research paper."""
     async def run():
+        project_path = Path(project).resolve()
         assistant = ResearchAssistant(project_dir=project)
         await assistant.initialize()
         mode = "interactive" if interactive else "automatic"
+        
+        # Track iteration if requested
+        if iterate:
+            console.print(f"[green]Starting new iteration for paper module[/green]")
+            if notes:
+                assistant.state.commit_user_input("paper", "iterate", notes)
+            assistant.state.save_state()
+        
         await assistant.write_paper(mode=mode, journal_format=format)
         await assistant.cleanup()
 
@@ -171,12 +234,23 @@ def paper(
 def review(
     project: str = typer.Option(..., help="Path to research project"),
     interactive: bool = typer.Option(True, help="Interactive mode with user reviews"),
+    iterate: bool = typer.Option(False, help="Create a new iteration of this module"),
+    notes: str = typer.Option("", help="Notes for this iteration"),
 ):
     """Review and refine paper."""
     async def run():
+        project_path = Path(project).resolve()
         assistant = ResearchAssistant(project_dir=project)
         await assistant.initialize()
         mode = "interactive" if interactive else "automatic"
+        
+        # Track iteration if requested
+        if iterate:
+            console.print(f"[green]Starting new iteration for review module[/green]")
+            if notes:
+                assistant.state.commit_user_input("review", "iterate", notes)
+            assistant.state.save_state()
+        
         await assistant.review_paper(mode=mode)
         await assistant.cleanup()
 
@@ -267,11 +341,15 @@ def iterations(
     project: str = typer.Argument(..., help="Path to research project"),
     module: Optional[str] = typer.Option(None, help="Show iterations for specific module"),
 ):
-    """Display iteration history for the project."""
+    """Display iteration history for the project (uses Git log)."""
     from research_assistant.state import ResearchState
     from rich.table import Table
     
     project_dir = Path(project).resolve()
+    
+    if not project_dir.exists():
+        console.print(f"[red]Project directory not found: {project_dir}[/red]")
+        raise typer.Exit(1)
     
     try:
         state = ResearchState.load_state(project_dir)
@@ -279,53 +357,69 @@ def iterations(
         console.print(f"[red]No project state found at {project_dir}[/red]")
         raise typer.Exit(1)
     
+    if not state or not state.git_tracker:
+        console.print("[red]Git tracking not enabled for this project[/red]")
+        raise typer.Exit(1)
+    
     if module:
-        # Show iterations for specific module
-        iterations = state.module_iterations.get(module, [])
-        if not iterations:
+        # Show iterations for specific module using Git
+        console.print(f"\n[bold cyan]Iteration History for {module.upper()}[/bold cyan]\n")
+        
+        status = state.git_tracker.get_module_status(module)
+        
+        if status['iteration_count'] == 0:
             console.print(f"[yellow]No iterations found for module: {module}[/yellow]")
             return
         
-        console.print(f"\n[bold cyan]Iteration History for {module.upper()}[/bold cyan]\n")
+        console.print(f"Total iterations: {status['iteration_count']}")
+        console.print(f"Iteration numbers: {', '.join(map(str, status['iterations']))}")
+        console.print(f"Total commits: {status['total_commits']}\n")
         
-        for iter_data in iterations:
-            table = Table(title=f"Iteration {iter_data.iteration}")
-            table.add_column("Property", style="cyan")
-            table.add_column("Value", style="white")
+        # Show commit table
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("Iteration", style="yellow")
+        table.add_column("Commit", style="yellow")
+        table.add_column("Message", style="white")
+        table.add_column("Date", style="dim")
+        
+        for commit in status['all_commits'][:20]:  # Show last 20
+            # Extract iteration number if present
+            import re
+            iter_match = re.search(r'Iteration (\d+)', commit['message'])
+            iter_num = iter_match.group(1) if iter_match else "-"
             
-            table.add_row("Timestamp", str(iter_data.timestamp))
-            table.add_row("Status", iter_data.status)
-            table.add_row("Input Files", ", ".join(str(f) for f in iter_data.input_files))
-            table.add_row("Output Files", ", ".join(str(f) for f in iter_data.output_files))
-            table.add_row("Notes", iter_data.notes)
-            
-            console.print(table)
-            console.print()
+            table.add_row(
+                iter_num,
+                commit['hash'],
+                commit['message'][:50] + "..." if len(commit['message']) > 50 else commit['message'],
+                commit['date'][:19]
+            )
+        
+        console.print(table)
     else:
         # Show summary for all modules
         console.print("\n[bold cyan]Iteration Summary for All Modules[/bold cyan]\n")
         
-        table = Table()
-        table.add_column("Module", style="cyan")
-        table.add_column("Iterations", justify="right", style="green")
-        table.add_column("Last Run", style="yellow")
-        table.add_column("Status", style="white")
+        modules = ["idea", "literature", "methodology", "analysis", "paper", "review"]
         
-        for module_name in ["idea", "literature", "methodology", "analysis", "paper", "review"]:
-            count = state.get_module_iteration_count(module_name)
-            if count > 0:
-                latest = state.get_latest_iteration(module_name)
+        table = Table(show_header=True, header_style="bold cyan")
+        table.add_column("Module", style="cyan")
+        table.add_column("Iterations", style="yellow")
+        table.add_column("Total Commits", style="white")
+        table.add_column("Last Commit", style="dim")
+        
+        for module in modules:
+            status = state.git_tracker.get_module_status(module)
+            if status['total_commits'] > 0:
+                last_commit = status['last_commit']
                 table.add_row(
-                    module_name.upper(),
-                    str(count),
-                    str(latest.timestamp) if latest else "-",
-                    latest.status if latest else "-"
+                    module,
+                    str(status['iteration_count']),
+                    str(status['total_commits']),
+                    last_commit['date'][:19] if last_commit else "-"
                 )
-            else:
-                table.add_row(module_name.upper(), "0", "-", "-")
         
         console.print(table)
-        console.print(f"\n[dim]Use --module to see detailed iteration history for a specific module[/dim]")
 
 
 @app.command()
@@ -491,6 +585,120 @@ def resources(
         state.resource_manager.save_resources()
         console.print("\n[green]✓ Resources configured and saved[/green]\n")
         console.print(state.resource_manager.get_resource_summary())
+
+
+@app.command()
+def status(
+    project: str = typer.Argument(..., help="Project name"),
+    module: Optional[str] = typer.Option(None, help="Filter by module (idea, literature, etc.)"),
+):
+    """Show Git status and commit history for the project."""
+    project_dir = Path(project)
+    
+    if not project_dir.exists():
+        console.print(f"[red]Error: Project directory '{project}' not found[/red]")
+        raise typer.Exit(1)
+    
+    # Load state to initialize Git tracker
+    from research_assistant.state import ResearchState
+    state = ResearchState.load_state(project_dir)
+    
+    if not state:
+        console.print(f"[yellow]Warning: No state file found, initializing...[/yellow]")
+        state = ResearchState(project_dir=project_dir)
+    
+    if not state.git_tracker:
+        console.print("[yellow]Git tracking not enabled for this project[/yellow]")
+        raise typer.Exit(1)
+    
+    if module:
+        # Show module-specific status
+        state.print_module_git_status(module)
+    else:
+        # Show general status
+        state.print_git_status()
+
+
+@app.command()
+def diff(
+    project: str = typer.Argument(..., help="Project name"),
+    module: str = typer.Option(..., "--module", "-m", help="Module name"),
+    from_iter: int = typer.Option(..., "--from", "-f", help="From iteration number"),
+    to_iter: int = typer.Option(..., "--to", "-t", help="To iteration number"),
+):
+    """Show diff between two iterations of a module."""
+    project_dir = Path(project)
+    
+    if not project_dir.exists():
+        console.print(f"[red]Error: Project directory '{project}' not found[/red]")
+        raise typer.Exit(1)
+    
+    # Load state
+    from research_assistant.state import ResearchState
+    state = ResearchState.load_state(project_dir)
+    
+    if not state or not state.git_tracker:
+        console.print("[red]Git tracking not enabled for this project[/red]")
+        raise typer.Exit(1)
+    
+    # Get diff
+    diff_output = state.get_iteration_diff(module, from_iter, to_iter)
+    
+    console.print(f"\n[bold cyan]Diff: {module} iteration {from_iter} → {to_iter}[/bold cyan]\n")
+    
+    # Print diff with syntax highlighting
+    from rich.syntax import Syntax
+    syntax = Syntax(diff_output, "diff", theme="monokai", line_numbers=False)
+    console.print(syntax)
+
+
+@app.command()
+def log(
+    project: str = typer.Argument(..., help="Project name"),
+    module: Optional[str] = typer.Option(None, "--module", "-m", help="Filter by module"),
+    count: int = typer.Option(20, "--count", "-n", help="Number of commits to show"),
+):
+    """Show commit log for the project."""
+    project_dir = Path(project)
+    
+    if not project_dir.exists():
+        console.print(f"[red]Error: Project directory '{project}' not found[/red]")
+        raise typer.Exit(1)
+    
+    # Load state
+    from research_assistant.state import ResearchState
+    state = ResearchState.load_state(project_dir)
+    
+    if not state or not state.git_tracker:
+        console.print("[red]Git tracking not enabled for this project[/red]")
+        raise typer.Exit(1)
+    
+    # Get log
+    commits = state.git_tracker.get_log(max_count=count, module=module)
+    
+    if not commits:
+        console.print("[yellow]No commits found[/yellow]")
+        return
+    
+    title = f"Commit Log" + (f" for {module}" if module else "")
+    console.print(f"\n[bold cyan]{title}[/bold cyan]\n")
+    
+    from rich.table import Table
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("Hash", style="yellow")
+    table.add_column("Message", style="white")
+    table.add_column("Author", style="dim")
+    table.add_column("Date", style="dim")
+    
+    for commit in commits:
+        table.add_row(
+            commit['hash'],
+            commit['message'][:60] + "..." if len(commit['message']) > 60 else commit['message'],
+            commit['author'],
+            commit['date'][:19]
+        )
+    
+    console.print(table)
 
 
 if __name__ == "__main__":

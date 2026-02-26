@@ -33,6 +33,9 @@ async def run_analysis_execution(
         require_approval: Whether to require user approval before code execution
         env_manager: Environment manager for isolated code execution
     """
+    # Ensure project_dir is absolute for relative_to() operations
+    project_dir = project_dir.resolve()
+    
     output_dir = project_dir / "output"
     code_dir = output_dir / "code"
     code_dir.mkdir(parents=True, exist_ok=True)
@@ -73,8 +76,9 @@ If the analysis is complete, state "ANALYSIS COMPLETE".
 If more work is needed, specify exactly what additional analysis should be performed.
 """
 
+            # Analyst uses reasoning model (o3-mini), needs 20-minute timeout
             analyst_decision = await orchestrator.send_to_agent(
-                "analyst", analyst_review_prompt, context
+                "analyst", analyst_review_prompt, context, timeout=1200
             )
 
             if "ANALYSIS COMPLETE" in analyst_decision.upper():
@@ -87,25 +91,19 @@ If more work is needed, specify exactly what additional analysis should be perfo
 
         # Step 1: Engineer writes code
         console.print(f"[cyan]Engineer writing code (iteration {analysis_iteration})...[/cyan]")
-        code_prompt = f"""Write Python code to perform the following analysis:
+        code_prompt = f"""Write Python code for: {analysis_request}
 
-{analysis_request}
+Context:
+- Data: {state.data_description[:200]}...
+- Method: {state.methodology[:300]}...
 
-Available context:
-- Methodology: {state.methodology[:500]}...
-- Data description: {state.data_description[:300]}...
+Requirements: Use pandas/numpy/matplotlib, save plots to output/plots/, print results.
 
-Requirements:
-- Use numpy, scipy, pandas, matplotlib as needed
-- Include clear comments
-- Save all plots to output/plots/ directory
-- Print key results and findings
-- Handle errors gracefully
-
-Provide complete, executable Python code.
+Provide complete Python code only.
 """
 
-        code_response = await orchestrator.send_to_agent("engineer", code_prompt, context)
+        # Use 20-minute timeout for code generation (o3-mini reasoning takes ~15min)
+        code_response = await orchestrator.send_to_agent("engineer", code_prompt, context, timeout=1200)
         state.add_agent_interaction("engineer", code_prompt, code_response)
 
         # Extract code (assuming it's in markdown code blocks)
@@ -120,7 +118,12 @@ Provide complete, executable Python code.
         code_file = code_dir / f"analysis_{analysis_iteration:02d}.py"
         state.save_to_file(code_file, code)
         console.print(f"[green]✓ Code saved to {code_file}[/green]")
+        
+        # Commit code generation
+        state.commit_step("analysis", "code_generation", f"Generated code for iteration {analysis_iteration}")
+        state.save_state()
 
+        # Step 2: Execute code (no approval required - automatic execution)
         # Inner loop: Debugging until successful execution
         debug_attempt = 0
         execution_successful = False
@@ -131,25 +134,24 @@ Provide complete, executable Python code.
             if debug_attempt > 1:
                 console.print(f"[yellow]Debug attempt {debug_attempt}/{max_debug_attempts}[/yellow]")
 
-            # Step 2: User approval (if required)
-            if require_approval and mode == "interactive":
-                console.print(f"\n[yellow]Code ready for execution: {code_file}[/yellow]")
-                if not Confirm.ask("Execute this code?", default=True):
-                    console.print("[red]Execution cancelled by user[/red]")
-                    return
-
             # Step 3: Executor runs code
             console.print("[cyan]Executor running code...[/cyan]")
+            console.print("[dim]This may take several minutes for complex analysis...[/dim]")
             
             # Use environment manager if available
+            # Increase timeout to 30 minutes for data analysis tasks (model training, CV, etc.)
             if env_manager:
-                success, stdout, stderr = env_manager.execute_code(code, timeout=300)
+                # Run synchronous execute_code in thread pool to avoid blocking event loop
+                import asyncio
+                success, stdout, stderr = await asyncio.to_thread(
+                    env_manager.execute_code, code, 1800
+                )
                 if success:
                     exec_response = f"Execution successful:\n\nSTDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
                 else:
                     exec_response = f"Execution failed:\n\nSTDOUT:\n{stdout}\n\nSTDERR:\n{stderr}"
             else:
-                # Fallback to direct execution
+                # Fallback to direct execution via agent (needs long timeout for code execution)
                 exec_prompt = f"""Execute this Python code and report results:
 
 ```python
@@ -162,7 +164,8 @@ Run the code using the execute_code tool and report:
 - Whether execution was successful
 """
 
-                exec_response = await orchestrator.send_to_agent("executor", exec_prompt, context)
+                # Executor needs 30-minute timeout to wait for code execution
+                exec_response = await orchestrator.send_to_agent("executor", exec_prompt, context, timeout=1800)
             
             state.add_agent_interaction("executor", "Code execution", exec_response)
 
@@ -170,9 +173,14 @@ Run the code using the execute_code tool and report:
             if "Execution successful" in exec_response or "successful" in exec_response.lower():
                 execution_successful = True
                 console.print("[green]✓ Code executed successfully[/green]")
+                
+                # Commit successful execution
+                state.commit_step("analysis", "execution_success", f"Iteration {analysis_iteration}, attempt {debug_attempt}")
+                state.save_state()
 
                 # Step 4: Analyst interprets results
                 console.print("[cyan]Analyst interpreting results...[/cyan]")
+                console.print("[dim]This may take 10-20 minutes (o3-mini reasoning model)...[/dim]")
                 interpret_prompt = f"""Interpret these analysis results:
 
 Code executed:
@@ -191,10 +199,12 @@ Provide:
 5. Any limitations or caveats
 """
 
+                # Analyst interpretation needs 20-minute timeout (o3-mini reasoning)
                 analysis_results = await orchestrator.send_to_agent(
-                    "analyst", interpret_prompt, context
+                    "analyst", interpret_prompt, context, timeout=1200
                 )
                 state.add_agent_interaction("analyst", interpret_prompt, analysis_results)
+                console.print("[green]✓ Analyst interpretation complete[/green]")
 
                 # Save intermediate analysis
                 state.analysis = analysis_results
@@ -212,12 +222,19 @@ Provide:
 ## Interpretation
 {analysis_results}
 """)
+                
+                # Commit iteration completion
+                state.commit_iteration("analysis", analysis_iteration, "Completed analysis iteration")
+                state.save_state()
 
                 console.print(f"[green]✓ Analysis iteration {analysis_iteration} complete[/green]")
 
             else:
                 # Execution failed - debug
                 console.print("[red]Execution failed. Engineer debugging...[/red]")
+                
+                # Extract error message for commit
+                error_summary = exec_response.split('\n')[0][:100] if exec_response else "Unknown error"
 
                 debug_prompt = f"""The code execution failed. Debug and fix the code.
 
@@ -232,7 +249,8 @@ Execution error:
 Analyze the error and provide corrected code that fixes the issue.
 """
 
-                debug_response = await orchestrator.send_to_agent("engineer", debug_prompt, context)
+                # Engineer debugging needs 20-minute timeout (o3-mini code generation)
+                debug_response = await orchestrator.send_to_agent("engineer", debug_prompt, context, timeout=1200)
                 state.add_agent_interaction("engineer", debug_prompt, debug_response)
 
                 # Extract corrected code
@@ -246,6 +264,10 @@ Analyze the error and provide corrected code that fixes the issue.
                 # Save debugged code
                 code_file = code_dir / f"analysis_{analysis_iteration:02d}_debug{debug_attempt}.py"
                 state.save_to_file(code_file, code)
+                
+                # Commit debug attempt
+                state.commit_debug_attempt("analysis", analysis_iteration, debug_attempt, error_summary)
+                state.save_state()
 
         if not execution_successful:
             console.print(f"[red]Failed to execute code after {max_debug_attempts} attempts[/red]")
@@ -257,23 +279,46 @@ Analyze the error and provide corrected code that fixes the issue.
     final_analysis_file = output_dir / "analysis.md"
     state.save_to_file(final_analysis_file, state.analysis)
     
-    # Collect all output files
-    output_files = ["output/analysis.md"]
-    output_files.extend([str(p.relative_to(project_dir)) for p in state.code_files])
-    output_files.extend([str(p.relative_to(project_dir)) for p in state.plot_paths])
-    output_files.extend([str(p.relative_to(project_dir)) for p in state.intermediate_analyses])
-    
-    # Track this iteration
-    iteration_num = state.add_module_iteration(
-        module="analysis",
-        input_files=["output/methodology.md", "output/idea.md", "output/literature.md", "input/data_description.md"],
-        output_files=output_files,
-        notes=f"Analysis execution with {analysis_iteration} iteration(s), nested debugging loops"
-    )
+    # Commit final analysis
+    state.commit_step("analysis", "finalized", f"Completed {analysis_iteration} iterations")
+    state.save_state()
 
-    console.print(f"\n[green]✓ Final analysis saved to {final_analysis_file} (iteration {iteration_num})[/green]")
+    console.print(f"\n[green]✓ Final analysis saved to {final_analysis_file}[/green]")
     console.print(f"[green]✓ Code files saved to {code_dir}[/green]")
     console.print(f"[green]✓ Total analysis iterations: {analysis_iteration}[/green]")
 
-    if not prompt_user_review(final_analysis_file, mode):
-        return
+    # Review results and ask if user wants more iterations
+    if mode == "interactive":
+        console.print("\n[bold cyan]Analysis Complete - Review Results[/bold cyan]")
+        console.print(f"Review output files:")
+        console.print(f"  - Analysis: {final_analysis_file}")
+        console.print(f"  - Code: {code_dir}")
+        console.print(f"  - Plots: {output_dir / 'plots'}")
+        console.print(f"  - Intermediate: {output_dir / 'intermediate'}")
+        
+        import asyncio
+        # Ask if user wants additional iterations
+        more_iterations = await asyncio.to_thread(
+            Confirm.ask, 
+            "\nDo you want to run additional analysis iterations?", 
+            default=False
+        )
+        
+        if more_iterations:
+            console.print("\n[cyan]Starting additional analysis iterations...[/cyan]")
+            # Commit user decision
+            state.commit_user_input("analysis", "continued", "User requested more iterations")
+            state.save_state()
+            
+            # Recursively call this function to continue analysis
+            await run_analysis_execution(
+                orchestrator, state, mode, project_dir, require_approval, env_manager
+            )
+        else:
+            console.print("[green]✓ Analysis workflow complete[/green]")
+            # Commit user decision
+            state.commit_user_input("analysis", "completed", "User confirmed completion")
+            state.save_state()
+    else:
+        # In automatic mode, just finish
+        console.print("[green]✓ Analysis workflow complete[/green]")

@@ -180,16 +180,15 @@ Format as a polished research idea ready for development.
     state.save_to_file(idea_file, final_idea)
     state.idea = final_idea
     
-    # Track this iteration
-    iteration_num = state.add_module_iteration(
-        module="idea",
-        input_files=["input/data_description.md"],
-        output_files=["output/idea.md", "output/01_initial_ideas.md", "output/02_critique.md", 
-                      "output/03_refined_ideas.md", "output/04_final_critique.md"],
-        notes="5-step idea generation and refinement process completed"
-    )
+    # Commit idea generation
+    state.commit_step("idea", "generation", "Completed 5-step idea generation and refinement")
+    state.save_state()
 
-    console.print(f"[green]✓ Final idea saved to {idea_file} (iteration {iteration_num})[/green]")
+    console.print(f"[green]✓ Final idea saved to {idea_file}[/green]")
 
     if not prompt_user_review(idea_file, mode):
         return
+    
+    # Commit user review
+    state.commit_user_input("idea", "reviewed", "User reviewed and approved idea")
+    state.save_state()

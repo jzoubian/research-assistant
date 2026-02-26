@@ -171,11 +171,12 @@ Every module:
 
 ## ⚙️ Configuration
 
-### API Keys
+### GitHub Copilot SDK
 ```bash
-export OPENAI_API_KEY="..."
-export ANTHROPIC_API_KEY="..."
+# Authenticate with GitHub Copilot
+gh auth login
 ```
+Requires active GitHub Copilot subscription.
 
 ### Local Models (Ollama)
 ```bash

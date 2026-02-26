@@ -31,20 +31,32 @@ async def run_literature_review(
 
     # Step 1: Search for relevant papers
     console.print("[cyan]Step 1/2: Searching for relevant papers...[/cyan]")
-    search_prompt = """Based on the research idea, identify and search for relevant academic papers.
+    search_prompt = """Based on the research idea, identify relevant academic papers.
+
+**IMPORTANT EFFICIENCY GUIDELINES:**
+- For well-known datasets (Iris, MNIST, Wine, Titanic, etc.): Use your knowledge base ONLY, do NOT call search_papers
+- For novel research: Call search_papers ONCE with a comprehensive query (max_results=5)
+- Limit: Maximum 1-2 search_papers calls total
+
+**For well-known/benchmark datasets:**
+Cite foundational papers from your knowledge:
+- Original dataset papers
+- Classic methodology papers
+- Well-known review papers
+
+**For novel/specialized research:**
+Use search_papers tool with ONE comprehensive query combining your search terms.
 
 Search for papers that:
 1. Address similar research questions
-2. Use similar methodologies
+2. Use similar methodologies  
 3. Provide relevant background/context
 4. Identify gaps in current knowledge
-
-Use the search_papers tool to find relevant publications.
-Aim for 10-15 highly relevant papers.
 """
 
+    # Use moderate timeout for literature search
     papers_response = await orchestrator.send_to_agent(
-        "literature_researcher", search_prompt, context
+        "literature_researcher", search_prompt, context, timeout=300
     )
     state.add_agent_interaction("literature_researcher", search_prompt, papers_response)
 
@@ -115,15 +127,15 @@ Provide feedback on what should be improved or added.
     state.save_to_file(lit_file, final_literature)
     state.literature = literature
     
-    # Track this iteration
-    iteration_num = state.add_module_iteration(
-        module="literature",
-        input_files=["output/idea.md", "input/data_description.md"],
-        output_files=["output/literature.md"],
-        notes="Literature search and synthesis with analyst review"
-    )
+    # Commit literature generation
+    state.commit_step("literature", "generation", "Completed literature search and synthesis with analyst review")
+    state.save_state()
 
-    console.print(f"[green]✓ Literature review saved to {lit_file} (iteration {iteration_num})[/green]")
+    console.print(f"[green]✓ Literature review saved to {lit_file}[/green]")
 
     if not prompt_user_review(lit_file, mode):
         return
+    
+    # Commit user review
+    state.commit_user_input("literature", "reviewed", "User reviewed and approved literature")
+    state.save_state()

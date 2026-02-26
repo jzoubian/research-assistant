@@ -316,13 +316,14 @@ The system loads all previous outputs automatically.
 
 ## Troubleshooting
 
-### API Keys
+### GitHub Copilot Authentication
 
-Ensure you have API keys configured for your chosen models:
+Ensure you are authenticated with GitHub Copilot:
 ```bash
-export OPENAI_API_KEY="..."
-export ANTHROPIC_API_KEY="..."
+gh auth login
 ```
+
+Requires an active GitHub Copilot subscription (Individual, Business, or Enterprise).
 
 ### Ollama for Local Models
 

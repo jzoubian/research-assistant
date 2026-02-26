@@ -449,11 +449,12 @@ class ResearchState:
 - Paths validated before file operations
 - No arbitrary file system access
 
-### API Keys
+### Authentication
 
-- Managed via environment variables
-- Not stored in code or config files
-- Different keys for different providers
+- Uses GitHub Copilot SDK authentication
+- Requires active GitHub Copilot subscription
+- Authenticated via GitHub CLI (`gh auth login`)
+- No API keys stored in code or config files
 
 ## Comparison with Denario
 

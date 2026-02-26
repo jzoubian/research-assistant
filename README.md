@@ -23,10 +23,43 @@ This project reimagines the [Denario scientific discovery pipeline](https://gith
 
 ## Installation
 
+### Option 1: Using Nix Shell (Recommended)
+
+The easiest way to get started with all dependencies configured:
+
+```bash
+cd research-assistant
+
+# Enter the development environment
+nix-shell shell.nix
+
+# The environment includes:
+# - Python 3.11 with pip
+# - Pixi package manager
+# - Research assistant (auto-installed)
+# - All build tools and dependencies
+
+# Authenticate with GitHub Copilot
+gh auth login
+```
+
+The `shell.nix` provides a complete FHS environment with research-assistant and all tools pre-configured.
+
+### Option 2: Direct Installation
+
 ```bash
 cd research-assistant
 pip install -e .
+
+# Authenticate with GitHub Copilot
+gh auth login
 ```
+
+**Requirements:**
+- Python 3.10+
+- GitHub CLI (`gh`)
+- Active GitHub Copilot subscription
+- Pixi (optional, for environment management): `curl -fsSL https://pixi.sh/install.sh | bash`
 
 ## Quick Start
 

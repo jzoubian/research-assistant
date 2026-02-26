@@ -114,6 +114,7 @@ research-assistant init iris_classification --env-manager pixi
 - Initializes state management
 - Sets up environment configuration
 - Creates default configuration file
+- Initializes Git repository with smart `.gitignore` (excludes data files, models, environments)
 
 **Output structure**:
 ```
@@ -128,7 +129,7 @@ iris_classification/
 │   ├── plots/                       # Visualizations
 │   └── paper.md                     # Final paper draft
 ├── .research_state.json             # State tracking (auto-managed)
-├── .iterations/                     # Iteration history
+├── .git/                            # Git repository for version control
 └── research_config.toml             # Configuration file
 ```
 
@@ -352,13 +353,15 @@ with practical applicability.
 research-assistant idea --project iris_classification --iterate --notes "Focus more on visualization techniques"
 ```
 
-This creates a new iteration entry in the project history and **preserves the previous output files** in `.iterations/idea/iteration_X/` before generating updated ideas.
+This commits your iteration intent to Git with a descriptive message before generating updated ideas.
 
 **Understanding iteration tracking**:
+- **Git-based tracking**: All changes are committed to a local Git repository with descriptive messages
 - **Analysis iterations** (`max_iterations` in config): Number of refinement cycles the analyst performs (each generates new code, executes, interprets results)
 - **Debug attempts** (`max_debug_attempts` in config): How many times the engineer can try to fix errors within a single iteration
-- **Manual iteration** (`--iterate` flag): Explicitly start a new batch of iterations, tracked separately in project history
+- **Manual iteration** (`--iterate` flag): Explicitly start a new batch of iterations, committed to Git with user notes
 - **Continuation**: After configured iterations complete, you can choose to run more iterations
+- **Version control**: Use `git log`, `git diff`, and other Git commands to explore history
 
 ---
 
@@ -370,30 +373,33 @@ research-assistant iterations iris_classification --module idea
 
 **Output**:
 ```
-Iteration History for Module: idea
+Iteration History for Module: idea (from Git)
 
-Iteration 1 (2026-02-25 10:30:15)
-  Status: completed
-  Input: data_description.md
-  Output: output/idea.md
-  Notes: Initial idea generation
-  Agent: idea_maker (gpt-4, temp=0.9)
+Module: idea
+  Iteration count: 2
+  Total commits: 4
+  Last activity: 2026-02-25 10:45:22
 
-Iteration 2 (2026-02-25 10:45:22)
-  Status: completed
-  Input: output/idea.md (edited)
-  Output: output/idea_v2.md
-  Notes: Focus more on visualization techniques
-  Agent: idea_maker (gpt-4, temp=0.9)
-  Parent: Iteration 1
+Recent commits:
+  abc1234 [idea] Iteration 2: Focus more on visualization techniques
+          2026-02-25 10:45:22
+  
+  def5678 [idea] User iterate: Focus more on visualization techniques
+          2026-02-25 10:45:20
+  
+  ghi9012 [idea] step: Completed 5-step idea generation and refinement
+          2026-02-25 10:30:15
+  
+  jkl3456 [idea] User reviewed: User reviewed and approved idea
+          2026-02-25 10:30:18
 ```
 
-**Feature Highlight**: Complete audit trail of all research iterations, including:
-- Timestamps
-- Input/output files
-- User notes
-- Agent configurations
-- Iteration relationships
+**Feature Highlight**: Complete audit trail stored in Git, including:
+- Commit hashes for precise reference
+- Timestamps for all changes
+- Iteration numbers extracted from commit messages
+- User actions and notes
+- Full Git history available via `git log`
 
 ---
 
@@ -767,14 +773,26 @@ research-assistant iterations iris_classification --module analysis
 ```
 
 ```
-Analysis Iteration 1
-  Debug Attempt 1 (failed): ModuleNotFoundError
-  Debug Attempt 2 (success): Fixed dependency specification
-  Status: completed
-  
-Analysis Iteration 2
-  Initial Execution (success): No debugging needed
-  Status: completed
+Iteration History for Module: analysis (from Git)
+
+Module: analysis
+  Iteration count: 2
+  Total commits: 8
+
+Recent commits:
+  abc1234 [analysis] Iteration 2: Completed analysis iteration
+  def5678 [analysis] execution_success: Iteration 2, attempt 1
+  ghi9012 [analysis] code_generation: Generated code for iteration 2
+  jkl3456 [analysis] Iteration 1: Completed analysis iteration
+  mno7890 [analysis] Iteration 1 - Debug attempt 2: Fixed dependency specification
+  pqr1234 [analysis] Iteration 1 - Debug attempt 1: ModuleNotFoundError: No module...
+  stu5678 [analysis] code_generation: Generated code for iteration 1
+```
+
+**Alternative**: Use Git directly for more detailed history:
+```bash
+cd iris_classification
+git log --grep="\[analysis\]" --oneline
 ```
 
 **Feature Highlight**: Automatic debugging eliminates manual intervention for common errors like missing imports, syntax issues, or data path problems, making the workflow much more efficient.
@@ -1659,7 +1677,7 @@ chunk_size = 1000
 
 **Solution**:
 ```bash
-# State is auto-saved every step
+# State is auto-saved and committed to Git every step
 research-assistant resume iris_classification
 
 # Check last saved state
@@ -1679,8 +1697,38 @@ Completed Modules:
 Next Module: analysis
 
 Last state save: 2026-02-25 11:18:43
-Iterations: 2 (1 in idea, 1 in methodology)
+Last Git commit: ghi9012 [methodology] step: Completed methodology development
 ```
+
+**Recovery from Git**:
+```bash
+# View what was lost
+cd iris_classification
+git log --oneline -5
+
+# Restore specific files if needed
+git checkout HEAD -- output/methodology.md
+```
+
+### Issue 6: Git Repository Issues
+
+**Problem**: Git commands fail or repository is corrupted
+
+**Solution**:
+```bash
+# Check repository status
+cd iris_classification
+git status
+
+# If repository is corrupted, reinitialize (preserves files)
+cd ..
+research-assistant init iris_classification --reinit-git
+
+# Disable Git tracking if needed
+research-assistant config iris_classification --set git_enabled=false
+```
+
+**Note**: Disabling Git removes version control benefits but allows the workflow to continue.
 
 ---
 
@@ -1691,7 +1739,7 @@ Iterations: 2 (1 in idea, 1 in methodology)
 research-assistant init <project> --env-manager <pixi|conda|venv|apptainer|nix|guix>
 research-assistant run <project> [--interactive]
 research-assistant resume <project> [--from <module>]
-research-assistant status <project>
+research-assistant status <project> [--module <name>]
 
 # Individual modules (with iteration support)
 research-assistant idea <project> [--interactive] [--iterate] [--notes "..."]
@@ -1711,8 +1759,11 @@ research-assistant config <project> --export-template --output <file>
 research-assistant resources <project> --configure
 research-assistant resources <project> --show
 
-# Iteration tracking
-research-assistant iterations <project> [--module <name>]
+# Git-based version control
+research-assistant status <project> [--module <name>]  # View Git status and recent commits
+research-assistant log <project> [--module <name>] [--count <n>]  # View commit history
+research-assistant diff <project> --module <name> --from <N> --to <M>  # Compare iterations
+research-assistant iterations <project> [--module <name>]  # View iteration summary from Git
 
 # Utilities
 research-assistant compare <project1> <project2> [--metrics ...]

@@ -9,15 +9,10 @@ try:
 except ImportError:
     ResourceManager = None
 
-
-class ModuleIteration(BaseModel):
-    """Track a single iteration of a module."""
-    iteration: int
-    timestamp: str
-    input_files: list[str] = Field(default_factory=list)
-    output_files: list[str] = Field(default_factory=list)
-    notes: str = ""
-    status: str = "completed"  # completed, failed, in_progress
+try:
+    from research_assistant.git_tracker import GitTracker
+except ImportError:
+    GitTracker = None
 
 
 class ResearchState(BaseModel):
@@ -46,70 +41,150 @@ class ResearchState(BaseModel):
     # Module completion tracking
     completed_modules: set[str] = Field(default_factory=set)
     
-    # Iteration tracking per module
-    module_iterations: dict[str, list[ModuleIteration]] = Field(default_factory=dict)
+    # Git-based iteration tracking
+    git_enabled: bool = True
+    
+    # Resource manager (not serialized)
+    resource_manager: Optional[object] = Field(default=None, exclude=True)
+    
+    # Git tracker (not serialized)
+    git_tracker: Optional[object] = Field(default=None, exclude=True)
     
     def __init__(self, **data):
-        """Initialize state and set up resource manager."""
+        """Initialize state and set up resource manager and Git tracking."""
         super().__init__(**data)
         # Ensure project directory exists
         self.project_dir.mkdir(parents=True, exist_ok=True)
+        
         # Initialize resource manager if available
         if ResourceManager:
             self.resource_manager = ResourceManager(self.project_dir)
             self.resource_manager.load_resources()
         else:
             self.resource_manager = None
+        
+        # Initialize Git tracker if enabled
+        if self.git_enabled and GitTracker:
+            self.git_tracker = GitTracker(self.project_dir)
+            self.git_tracker.ensure_initialized()
+        else:
+            self.git_tracker = None
 
     class Config:
         arbitrary_types_allowed = True
 
     def mark_module_complete(self, module: str) -> None:
-        """Mark a module as completed."""
+        """Mark a module as completed and commit to Git."""
         self.completed_modules.add(module)
+        if self.git_tracker:
+            self.git_tracker.commit_step(module, "completed", "Module marked as complete")
+        self.save_state()
 
     def is_module_complete(self, module: str) -> bool:
         """Check if a module is completed."""
         return module in self.completed_modules
     
-    def add_module_iteration(
-        self, module: str, input_files: list[str], output_files: list[str], notes: str = ""
-    ) -> int:
-        """Add a new iteration for a module.
+    def commit_step(self, module: str, step: str, description: str = "") -> Optional[str]:
+        """Commit a step to Git.
         
+        Args:
+            module: Module name
+            step: Step name
+            description: Optional description
+            
         Returns:
-            Iteration number
+            Commit hash or None if Git not enabled
         """
-        from datetime import datetime
-        
-        if module not in self.module_iterations:
-            self.module_iterations[module] = []
-        
-        iteration_num = len(self.module_iterations[module]) + 1
-        
-        iteration = ModuleIteration(
-            iteration=iteration_num,
-            timestamp=datetime.now().isoformat(),
-            input_files=input_files,
-            output_files=output_files,
-            notes=notes,
-            status="completed"
-        )
-        
-        self.module_iterations[module].append(iteration)
-        return iteration_num
+        if self.git_tracker:
+            return self.git_tracker.commit_step(module, step, description)
+        return None
     
-    def get_module_iteration_count(self, module: str) -> int:
-        """Get the number of iterations for a module."""
-        return len(self.module_iterations.get(module, []))
+    def commit_iteration(self, module: str, iteration: int, description: str = "") -> Optional[str]:
+        """Commit an iteration to Git.
+        
+        Args:
+            module: Module name
+            iteration: Iteration number
+            description: Optional description
+            
+        Returns:
+            Commit hash or None if Git not enabled
+        """
+        if self.git_tracker:
+            return self.git_tracker.commit_iteration(module, iteration, description)
+        return None
     
-    def get_latest_iteration(self, module: str) -> Optional[ModuleIteration]:
-        """Get the latest iteration for a module."""
-        iterations = self.module_iterations.get(module, [])
-        return iterations[-1] if iterations else None
+    def commit_debug_attempt(self, module: str, iteration: int, attempt: int, error: str = "") -> Optional[str]:
+        """Commit a debug attempt to Git.
+        
+        Args:
+            module: Module name
+            iteration: Iteration number
+            attempt: Debug attempt number
+            error: Error message
+            
+        Returns:
+            Commit hash or None if Git not enabled
+        """
+        if self.git_tracker:
+            return self.git_tracker.commit_debug_attempt(module, iteration, attempt, error)
+        return None
+    
+    def commit_user_input(self, module: str, action: str, notes: str = "") -> Optional[str]:
+        """Commit user input to Git.
+        
+        Args:
+            module: Module name
+            action: User action
+            notes: Optional notes
+            
+        Returns:
+            Commit hash or None if Git not enabled
+        """
+        if self.git_tracker:
+            return self.git_tracker.commit_user_input(module, action, notes)
+        return None
+    
+    def get_module_status(self, module: str) -> Optional[dict]:
+        """Get module status from Git.
+        
+        Args:
+            module: Module name
+            
+        Returns:
+            Status dict or None if Git not enabled
+        """
+        if self.git_tracker:
+            return self.git_tracker.get_module_status(module)
+        return None
+    
+    def get_iteration_diff(self, module: str, from_iteration: int, to_iteration: int) -> Optional[str]:
+        """Get diff between iterations.
+        
+        Args:
+            module: Module name
+            from_iteration: Starting iteration
+            to_iteration: Ending iteration
+            
+        Returns:
+            Diff string or None if Git not enabled
+        """
+        if self.git_tracker:
+            return self.git_tracker.get_iteration_diff(module, from_iteration, to_iteration)
+        return None
+    
+    def print_git_status(self) -> None:
+        """Print Git status."""
+        if self.git_tracker:
+            self.git_tracker.print_status()
+    
+    def print_module_git_status(self, module: str) -> None:
+        """Print Git status for a module."""
+        if self.git_tracker:
+            self.git_tracker.print_module_status(module)
     
     def save_state(self) -> None:
-        """Save state to JSON file."""
+        """Save state to JSON file and commit to Git."""
         state_file = self.project_dir / ".research_state.json"
         state_data = self.model_dump(mode="json")
         # Convert Path objects to strings for JSON serialization
@@ -121,6 +196,12 @@ class ResearchState(BaseModel):
         import json
         with open(state_file, "w") as f:
             json.dump(state_data, f, indent=2)
+        
+        # Commit state to Git
+        if self.git_tracker:
+            self.git_tracker.stage_files([".research_state.json"])
+            if self.git_tracker.has_changes():
+                self.git_tracker.commit("Update research state")
     
     @classmethod
     def load_state(cls, project_dir: Path) -> Optional["ResearchState"]:
@@ -139,6 +220,7 @@ class ResearchState(BaseModel):
         state_data["code_files"] = [Path(p) for p in state_data["code_files"]]
         state_data["intermediate_analyses"] = [Path(p) for p in state_data["intermediate_analyses"]]
         
+        # Create state instance (this will reinitialize Git tracker)
         return cls(**state_data)
 
     def add_agent_interaction(self, agent: str, prompt: str, response: str) -> None:

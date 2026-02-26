@@ -129,15 +129,15 @@ Provide specific feedback on scientific rigor and validity.
     state.save_to_file(method_file, final_methodology)
     state.methodology = methodology
     
-    # Track this iteration
-    iteration_num = state.add_module_iteration(
-        module="methodology",
-        input_files=["output/idea.md", "output/literature.md", "input/data_description.md"],
-        output_files=["output/methodology.md"],
-        notes="Methodology development with engineer and analyst review"
-    )
+    # Commit methodology generation
+    state.commit_step("methodology", "generation", "Completed methodology development with engineer and analyst review")
+    state.save_state()
 
-    console.print(f"[green]✓ Methodology saved to {method_file} (iteration {iteration_num})[/green]")
+    console.print(f"[green]✓ Methodology saved to {method_file}[/green]")
 
     if not prompt_user_review(method_file, mode):
         return
+    
+    # Commit user review
+    state.commit_user_input("methodology", "reviewed", "User reviewed and approved methodology")
+    state.save_state()
