@@ -353,13 +353,15 @@ with practical applicability.
 - Edit the file directly if you want to refine the direction
 - Add notes about which ideas to prioritize
 
-**To regenerate ideas with iteration tracking**: Use the `--iterate` flag with optional notes:
+**To regenerate with iteration tracking**: Use the `--iterate` flag with optional notes:
 
 ```bash
 research-assistant idea --project iris_classification --iterate --notes "Focus more on visualization techniques"
 ```
 
 This commits your iteration intent to Git with a descriptive message before generating updated ideas.
+
+**Note**: The `--iterate` and `--notes` flags are available for **all modules** (idea, literature, methodology, analysis, paper, review), allowing you to track refinements throughout your workflow.
 
 **Understanding iteration tracking**:
 - **Git-based tracking**: All changes are committed to a local Git repository with descriptive messages
